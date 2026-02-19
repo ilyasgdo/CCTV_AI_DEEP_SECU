@@ -1,0 +1,92 @@
+Passer de la "règle codée en dur" (ex: épaules sous les genoux) à l'analyse ST-GCN (Spatial Temporal Graph Convolutional Network) est le véritable saut vers l'IA professionnelle.
+
+Voici le plan d'implémentation détaillé et mis à jour, intégrant cette nouvelle dimension temporelle pour une précision redoutable. Le grand avantage ici, c'est que nous allons optimiser le système : au lieu d'avoir un YOLO pour les boîtes et un YOLO pour la posture, nous allons utiliser un seul modèle (YOLOv8-Pose) qui fait tout en même temps (Détection + Suivi + Squelette) pour économiser votre RTX 3080 Ti.
+
+Voici votre nouvelle feuille de route :
+
+Phase 0 : La Fondation (L'environnement enrichi)
+L'analyse temporelle demande des outils mathématiques plus puissants. Il faut préparer le terrain pour le ST-GCN.
+
+
+Les pilotes NVIDIA : CUDA Toolkit (11.8 ou 12.1) et cuDNN installés.
+
+L'environnement virtuel : Création d'un environnement Conda ou venv.
+ verification de la version cuda 
+Les bibliothèques indispensables (Mise à jour) :
+
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cuxx (PyTorch est obligatoire pour faire tourner le ST-GCN).
+
+pip install ultralytics (Contient YOLOv8-Pose et ByteTrack).
+
+pip install insightface onnxruntime-gpu (Pour la reconnaissance faciale).
+
+pip install opencv-python numpy (Pour la vidéo et la manipulation de matrices).
+
+Phase 1 : Détection, Suivi et Extraction Squelettique (La Brique 1 tout-en-un)
+On unifie la détection et la posture en une seule étape ultra-rapide.
+
+Le Modèle unifié : Chargez  yolov8m-pose.pt (Medium) ou large . Ce modèle est capable de sortir la boîte englobante (pour l'ID et le visage) ET les 17 points clés du corps (pour le ST-GCN) en une seule passe.
+
+Lecture et Suivi : Lancez la vidéo avec OpenCV et activez le mode Tracking de YOLO (model.track()).
+
+Le Résultat attendu : Sur votre vidéo, chaque personne a un cadre, un numéro de suivi (ID), et un "squelette" dessiné par-dessus en temps réel.
+
+Phase 2 : L'Identification Visuelle (La Brique 2)
+On garde l'architecture précédente, qui est très fiable.
+
+Liste Blanche : Vos photos de référence converties en vecteurs (fichiers .npy).
+
+L'inférence Faciale : Quand YOLO sort une boîte englobante pour la "Personne #1", vous recadrez l'image sur le tiers supérieur de cette boîte (là où se trouve la tête) et vous l'envoyez à InsightFace.
+
+Le Résultat attendu : L'ID numérique est remplacé par "Thomas" ou "INCONNU".
+
+Phase 3 : L'Historique et les Temps (La Brique 3)
+La base de données pour archiver ce que voit le système.
+
+La base SQLite : Une table avec ID, Nom (Thomas/Inconnu), Heure_Entree, Heure_Sortie.
+
+Logique temporelle : * Nouvel ID détecté = Création d'une ligne d'entrée.
+
+ID perdu pendant + de 5 minutes = Clôture de la ligne et calcul du temps passé.
+
+Le Résultat attendu : Un historique propre des présences, consultable à tout moment.
+
+Phase 4 : L'Analyse Comportementale via ST-GCN (La Brique 4 - Le Cœur du système)
+C'est ici que la magie opère. Au lieu d'analyser une image isolée, on va créer une "mémoire court terme" pour chaque personne, puis demander au ST-GCN d'analyser cette mémoire.
+
+Le "Buffer" Temporel (La mémoire) :
+
+En Python, utilisez la fonction deque de la bibliothèque collections.
+
+Pour chaque ID à l'écran, créez une liste d'attente qui garde en mémoire les coordonnées (X, Y) de son squelette sur les 30 dernières images (ce qui représente environ 1 à 2 secondes d'action).
+
+L'intégration du modèle ST-GCN :
+
+Vous devrez télécharger un modèle ST-GCN pré-entraîné (disponible sur des dépôts GitHub open source comme pyskl ou st-gcn). Ces modèles sont souvent entraînés sur des bases de données comme Kinetics ou NTU-RGB+D (qui connaissent les actions : tomber, donner un coup, marcher, s'asseoir).
+
+Chargez ce modèle avec PyTorch (torch.load()).
+
+L'Inférence de l'Action :
+
+Dès que le "buffer" d'une personne atteint 30 images, votre script Python transforme cet historique en un Tenseur (une matrice mathématique).
+
+Il envoie ce tenseur au ST-GCN.
+
+Le ST-GCN calcule la cinématique du squelette et répond : [Marche: 5%, Immobile: 2%, Chute: 93%]
+
+Le Maraudage (Règle Spatiale Complémentaire) : On garde la règle du polygone pour le temps passé au même endroit, car le ST-GCN ne compte pas le temps, il n'analyse que le mouvement.
+
+Le Résultat attendu : Si la personne trébuche et tombe, le ST-GCN capte la vélocité et l'angle de la descente sur la dernière seconde et affiche une alerte rouge "CHUTE DÉTECTÉE".
+
+Phase 5 : L'Optimisation pour la RTX 3080 Ti
+Avec YOLO-Pose + InsightFace + ST-GCN + SQLite, votre système est lourd. Voici comment garantir le temps réel (30 FPS).
+
+Le Pipeline Asynchrone (Multithreading) :
+
+Thread 1 : Capture la vidéo (OpenCV).
+
+Thread 2 : Fait tourner YOLO-Pose (Boîtes + Squelettes) à chaque image.
+
+Thread 3 : Ne lance le ST-GCN que toutes les 5 images (soit environ 3 fois par seconde). Analyser la posture 30 fois par seconde est inutile et sature la carte graphique.
+
+La Reconnaissance Faciale paresseuse : Ne faites tourner InsightFace qu'une fois toutes les 2 secondes pour un "INCONNU", et arrêtez de scanner son visage une fois qu'il a été identifié avec certitude (95%+). Mémorisez juste son ID avec le tracker de YOLO.
