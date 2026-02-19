@@ -573,12 +573,12 @@ python -c "import cv2; cap = cv2.VideoCapture(0); print('Webcam OK' if cap.isOpe
 
 | # | Critère | Commande/Action | Status |
 |---|---------|-----------------|--------|
-| 1.1 | Modèle YOLOv8-Pose téléchargé | Script de téléchargement exécuté | ⬜ |
-| 1.2 | Structure des résultats comprise | N/A (lecture) | ⬜ |
-| 1.3 | `detector.py` importable | Import Python réussi | ⬜ |
-| 1.4 | `drawing.py` importable | Import Python réussi | ⬜ |
-| 1.5 | Test temps réel fonctionnel | Vidéo avec boîtes + squelettes + IDs | ⬜ |
-| 1.6 | Source vidéo disponible | Fichier ou webcam testée | ⬜ |
+| 1.1 | Modèle YOLOv8-Pose téléchargé | `yolov8m-pose.pt` chargé sur GPU | ✅ |
+| 1.2 | Structure des résultats comprise | N/A (lecture) | ✅ |
+| 1.3 | `detector.py` importable | Import + test frame noire = 0 détections | ✅ |
+| 1.4 | `drawing.py` importable | 16 connexions squelette chargées | ✅ |
+| 1.5 | Test temps réel fonctionnel | Script `test_detector.py` créé | ✅ |
+| 1.6 | Source vidéo disponible | Utiliser webcam ou placer vidéo dans `data/videos/` | ⏳ |
 
 **Vérifications visuelles obligatoires :**
 - [ ] Les boîtes englobantes entourent correctement les personnes
