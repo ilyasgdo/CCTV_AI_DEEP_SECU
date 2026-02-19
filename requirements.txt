@@ -1,0 +1,22 @@
+# GPU / CUDA (installer PyTorch séparément avec --index-url)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# torch
+# torchvision
+# torchaudio
+
+# Detection + Pose Estimation
+ultralytics>=8.0.0
+
+# Reconnaissance Faciale
+insightface>=0.7.0
+onnxruntime-gpu>=1.15.0
+
+# Vision et Calcul
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Utilitaires
+scipy>=1.10.0
+matplotlib>=3.7.0
+tqdm>=4.65.0
+cython>=3.0.0

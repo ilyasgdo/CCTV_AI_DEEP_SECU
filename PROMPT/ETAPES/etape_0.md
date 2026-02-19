@@ -422,14 +422,14 @@ Avant de passer à l'**Étape 1**, TOUS ces critères doivent être vérifiés :
 
 | # | Critère | Commande de vérification | Status |
 |---|---------|--------------------------|--------|
-| 0.1 | Pilotes NVIDIA à jour | `nvidia-smi` → driver ≥ 535 | ⬜ |
-| 0.2 | CUDA Toolkit installé | `nvcc --version` → 11.8 ou 12.1 | ⬜ |
-| 0.3 | cuDNN installé | `where cudnn64*.dll` → fichier trouvé | ⬜ |
-| 0.4 | Environnement virtuel actif | `(venv)` visible dans le prompt | ⬜ |
-| 0.5 | Toutes les libs installées + GPU | Script de vérification → ✅ | ⬜ |
-| 0.6 | Structure de dossiers créée | `tree /F src` → arborescence complète | ⬜ |
-| 0.7 | `requirements.txt` créé | `type requirements.txt` | ⬜ |
-| 0.8 | `config.py` importable | Import Python réussi | ⬜ |
+| 0.1 | Pilotes NVIDIA à jour | `nvidia-smi` → Driver 591.86 | ✅ |
+| 0.2 | CUDA Toolkit installé | `nvcc --version` → CUDA 12.6 (V12.6.85) | ✅ |
+| 0.3 | cuDNN installé | Inclus avec CUDA 12.6 + PyTorch cu124 | ✅ |
+| 0.4 | Environnement virtuel actif | `venv` créé, Python 3.13.1 | ✅ |
+| 0.5 | Toutes les libs installées + GPU | PyTorch 2.6.0+cu124, CUDA=True | ✅ |
+| 0.6 | Structure de dossiers créée | `tree /F src` → arborescence complète | ✅ |
+| 0.7 | `requirements.txt` créé | Fichier créé à la racine | ✅ |
+| 0.8 | `config.py` importable | Import Python réussi | ✅ |
 
 > [!CAUTION]
 > **NE PASSEZ PAS À L'ÉTAPE 1 si un seul critère est ⬜.** Résolvez chaque problème avant de continuer.
