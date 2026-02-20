@@ -217,7 +217,8 @@ def draw_fps(frame: np.ndarray, fps: float) -> np.ndarray:
 
 
 def draw_status_bar(frame: np.ndarray, num_persons: int, db_stats: dict,
-                    person_stats: Dict[int, dict] = None) -> np.ndarray:
+                    person_stats: Dict[int, dict] = None,
+                    counter_stats: dict = None) -> np.ndarray:
     """Dessine la barre de statut en haut de l'écran."""
     h, w = frame.shape[:2]
 
@@ -230,14 +231,28 @@ def draw_status_bar(frame: np.ndarray, num_persons: int, db_stats: dict,
     present = db_stats.get('currently_present', 0)
     alerts = db_stats.get('total_alerts', 0)
 
-    # Icônes textuelles
-    cv2.putText(frame, f"Personnes: {num_persons}", (120, 30),
+    x = 120
+    cv2.putText(frame, f"Personnes: {num_persons}", (x, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-    cv2.putText(frame, f"| BDD: {present}", (300, 30),
+    x += 170
+
+    # Compteur entrées/sorties
+    if counter_stats:
+        entries = counter_stats.get("total_entries", 0)
+        exits = counter_stats.get("total_exits", 0)
+        cv2.putText(frame, f"| IN:{entries}", (x, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 0), 1, cv2.LINE_AA)
+        x += 90
+        cv2.putText(frame, f"OUT:{exits}", (x, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 220), 1, cv2.LINE_AA)
+        x += 90
+
+    cv2.putText(frame, f"| BDD: {present}", (x, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
+    x += 120
 
     alert_color = (0, 0, 255) if alerts > 0 else (100, 100, 100)
-    cv2.putText(frame, f"| Alertes: {alerts}", (430, 30),
+    cv2.putText(frame, f"| Alertes: {alerts}", (x, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, alert_color, 1, cv2.LINE_AA)
 
     return frame

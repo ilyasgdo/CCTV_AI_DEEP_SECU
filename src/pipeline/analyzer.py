@@ -293,7 +293,7 @@ class Analyzer:
 
         # Détection d'objets (YOLOv8n)
         self.object_detector = ObjectDetector(
-            model_name="yolov8n.pt",
+            model_name="yolo26n.pt",
             device=DEVICE,
             confidence=0.35,
             detect_interval=3

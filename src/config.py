@@ -31,7 +31,7 @@ def _detect_device():
 DEVICE = _detect_device()
 
 # === YOLO-POSE ===
-YOLO_MODEL = "yolov8m-pose.pt"  # Medium. Changer en "yolov8l-pose.pt" pour Large
+YOLO_MODEL = "yolo11m-pose.pt"  # YOLO11 Medium Pose — meilleur que v8 (+2% mAP)
 YOLO_CONFIDENCE = 0.5            # Seuil de confiance minimum
 YOLO_DEVICE = DEVICE             # Auto-détecté : 0 (CUDA), "mps" (Apple M), "cpu"
 

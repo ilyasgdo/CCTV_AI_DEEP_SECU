@@ -1,7 +1,7 @@
 """
 Détecteur d'objets portés/utilisés par chaque personne.
 
-Utilise YOLOv8n (nano) pour détecter les 80 classes COCO
+Utilise YOLO26n (nano, dernière génération) pour détecter les 80 classes COCO
 à l'intérieur de la boîte englobante de chaque personne.
 
 Objets détectés pertinents pour la vidéosurveillance :
@@ -79,11 +79,11 @@ class ObjectDetector:
     """
     Détecte les objets portés/utilisés par chaque personne.
     
-    Utilise YOLOv8n sur les crops des personnes détectées.
+    Utilise YOLO26n sur les crops des personnes détectées.
     Tourne à fréquence réduite pour économiser le GPU.
     """
 
-    def __init__(self, model_name: str = "yolov8n.pt", device: int = 0,
+    def __init__(self, model_name: str = "yolo26n.pt", device=0,
                  confidence: float = 0.35, detect_interval: int = 3):
         """
         Args:
