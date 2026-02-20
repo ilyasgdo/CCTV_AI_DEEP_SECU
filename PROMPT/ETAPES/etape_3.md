@@ -552,9 +552,9 @@ python tests/test_database.py
 
 | # | Critère | Commande/Action | Status |
 |---|---------|-----------------|--------|
-| 3.1 | Schéma SQL défini | N/A (conception) | ⬜ |
-| 3.2 | Module `db_manager.py` testé | Script de test en mémoire → ✅ | ⬜ |
-| 3.3 | Intégration pipeline + BDD | Test temps réel avec enregistrement | ⬜ |
+| 3.1 | Schéma SQL défini | `presence_records` + `alerts` + 3 index | ✅ |
+| 3.2 | Module `db_manager.py` testé | Tests in-memory complets (CRUD+alertes) | ✅ |
+| 3.3 | Intégration pipeline + BDD | Script `test_database.py` prêt | ✅ |
 
 **Vérifications fonctionnelles obligatoires :**
 - [ ] Nouvelle personne détectée → ligne créée avec `PRESENT`
