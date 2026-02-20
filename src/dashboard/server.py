@@ -6,6 +6,8 @@ Endpoints :
   GET /api/stats       → Stats système (JSON)
   GET /api/persons     → Stats par personne (JSON)
   GET /api/counter     → Compteur entrées/sorties (JSON)
+  GET /api/clips       → Clips vidéo enregistrés (JSON)
+  GET /api/report      → Génère et télécharge un rapport PDF
   GET /api/alerts      → Alertes récentes (JSON)
   GET /video_feed      → Flux MJPEG live
 """
@@ -14,7 +16,7 @@ import time
 import json
 import threading
 import numpy as np
-from flask import Flask, Response, jsonify, render_template
+from flask import Flask, Response, jsonify, render_template, send_file
 from pathlib import Path
 
 
@@ -97,6 +99,35 @@ def create_dashboard(shared_state: dict) -> Flask:
             "present": cs.get("present", 0),
             "recent_events": cs.get("recent_events", [])[-20:],
         })
+
+    @app.route("/api/clips")
+    def api_clips():
+        """Liste des clips vidéo enregistrés."""
+        clips = shared_state.get("clips", [])
+        return jsonify({"clips": clips, "total": len(clips)})
+
+    @app.route("/api/report")
+    def api_report():
+        """Génère un rapport PDF et le renvoie."""
+        try:
+            from src.reports.pdf_report import ReportGenerator
+            gen = ReportGenerator()
+            session_data = {
+                "fps": shared_state.get("fps", 0),
+                "frames": 0,
+                "total_persons": len(shared_state.get("person_stats", {})),
+                "total_alerts": shared_state.get("db_stats", {}).get("total_alerts", 0),
+                "total_clips": len(shared_state.get("clips", [])),
+                "person_stats": shared_state.get("person_stats", {}),
+                "counter_stats": shared_state.get("counter_stats", {}),
+                "alerts": [],
+            }
+            path = gen.generate(session_data)
+            if path:
+                return send_file(path, as_attachment=True)
+            return jsonify({"error": "Erreur génération"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     def generate_mjpeg():
         """Générateur de frames MJPEG."""
