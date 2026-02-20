@@ -37,40 +37,65 @@ C'est l'option par défaut. Le système utilise automatiquement la webcam intég
 python src/main.py
 ```
 
-### Option B — Caméra d'un Téléphone (via IP Webcam)
+### Option B — Caméra d'un Téléphone (Wi-Fi ou USB)
 
 Transformez votre téléphone Android/iPhone en caméra de surveillance :
 
-#### Étape 1 — Installer l'App sur le Téléphone
+#### 📲 Étape 1 — Installer l'App sur le Téléphone
 
-| Plateforme | Application | Lien |
-|------------|-------------|------|
-| **Android** | **IP Webcam** (Pavel Khlebovich) | [Google Play](https://play.google.com/store/apps/details?id=com.pas.webcam) |
-| **iPhone** | **EpocCam** ou **DroidCam** | App Store |
+| Plateforme | Application | Wi-Fi | USB | Lien |
+|------------|-------------|-------|-----|------|
+| **Android** | **DroidCam** | ✅ | ✅ | [Google Play](https://play.google.com/store/apps/details?id=com.dev47apps.droidcam) |
+| **Android** | **IP Webcam** | ✅ | ❌ | [Google Play](https://play.google.com/store/apps/details?id=com.pas.webcam) |
+| **iPhone** | **EpocCam** | ✅ | ✅ | App Store |
+| **iPhone** | **DroidCam** | ✅ | ✅ | App Store |
 
-#### Étape 2 — Configurer l'App
+#### 📶 Méthode A — Via Wi-Fi (sans câble)
 
-1. Ouvrir **IP Webcam** sur le téléphone
-2. Défiler vers le bas et appuyer sur **"Démarrer le serveur"**
-3. L'app affiche l'adresse du flux, par exemple : `http://192.168.1.42:8080`
-4. S'assurer que le **PC et le téléphone sont sur le même réseau Wi-Fi**
-
-#### Étape 3 — Lancer le système avec le flux du téléphone
+1. PC et téléphone sur le **même réseau Wi-Fi**
+2. Ouvrir l'app sur le téléphone → **démarrer le serveur**
+3. Noter l'adresse affichée (ex: `http://192.168.1.42:8080`)
+4. Lancer le système :
 
 ```powershell
-# Remplacer l'IP par celle affichée sur votre téléphone
+# IP Webcam (Android)
 python src/main.py --source "http://192.168.1.42:8080/video"
+
+# DroidCam (Android/iPhone)
+python src/main.py --source "http://192.168.1.42:4747/video"
 ```
 
-> **💡 Astuce :** Pour DroidCam, l'URL est généralement `http://IP:4747/video`.
-> Pour EpocCam, suivre les instructions de l'app pour obtenir l'URL du flux.
+#### � Méthode B — Via USB (plus stable, recommandé)
 
-#### Étape 4 — Vérifier que ça fonctionne
+**Avec DroidCam (Android) :**
 
-Si le flux ne se connecte pas :
-- Vérifier que le téléphone et le PC sont sur le **même réseau Wi-Fi**
-- Vérifier que le **pare-feu Windows** n'est pas bloquant
-- Essayer d'ouvrir `http://192.168.1.42:8080/video` dans le navigateur du PC
+1. Installer **DroidCam Client** sur le PC : [droidcam.app](https://www.dev47apps.com/)
+2. Activer le **débogage USB** sur le téléphone :
+   - `Paramètres → À propos → Appuyer 7x sur "Numéro de build"`
+   - `Paramètres → Options développeur → Débogage USB → Activer`
+3. Brancher le téléphone au PC via USB
+4. Ouvrir **DroidCam Client** sur le PC → Sélectionner **USB** → **Start**
+5. DroidCam crée une **webcam virtuelle** (index 1 ou 2) :
+
+```powershell
+# DroidCam USB = webcam virtuelle (essayer index 1, 2, ou 3)
+python src/main.py --source 1
+
+# Si index 1 ne marche pas, essayer :
+python src/main.py --source 2
+```
+
+**Avec EpocCam (iPhone) :**
+
+1. Installer **EpocCam** sur iPhone + le driver sur PC
+2. Brancher l'iPhone en USB
+3. EpocCam apparaît comme webcam virtuelle :
+
+```powershell
+python src/main.py --source 1
+```
+
+> **💡 Astuce USB :** Pour trouver le bon index de caméra, lancez le menu (`start.bat`) option [1] avec la webcam du PC, puis option [2] avec l'USB branché en essayant les index 1, 2, 3.
 
 ---
 
@@ -304,39 +329,52 @@ CCTV_AI_DEEP_SECU/
 
 ## 👤 Reconnaissance Faciale — Ajouter des Personnes
 
-Pour que le système reconnaisse des personnes :
+### Méthode 1 — Outil de Capture Intégré (Recommandé) 🎥
 
-### 1. Ajouter des photos
+L'outil capture les visages directement depuis la caméra :
+
+```powershell
+# Via le menu start.bat → Option [4]
+.\start.bat
+
+# OU directement :
+.\venv\Scripts\Activate.ps1
+python tools/whitelist_capture.py
+```
+
+**Comment ça marche :**
+
+1. 📷 La caméra s'ouvre avec détection de visages en direct
+2. 🟢 Cadrez le visage de la personne (boîte verte = visage détecté)
+3. ⌨️ Appuyez sur **`C`** pour capturer → tapez le **nom** → **Entrée**
+4. 🔄 Répétez pour 3-5 photos (angles légèrement différents)
+5. 🔨 Appuyez sur **`B`** pour construire la whitelist automatiquement
+6. ✅ Relancez le système — les personnes seront reconnues !
+
+| Touche | Action |
+|--------|--------|
+| `C` | Capturer le visage visible |
+| `B` | Construire la whitelist (quand terminé) |
+| `Q` | Quitter |
+
+> **� Conseils :** Capturez 3-5 photos par personne avec des angles légèrement variés (face, 3/4) et un bon éclairage.
+
+### Méthode 2 — Photos Manuelles
+
+Vous pouvez aussi ajouter des photos manuellement :
+
 ```
 data/whitelist_photos/
-├── NomDeLaPersonne/
-│   ├── photo1.jpg      ← Visage de face, bien éclairé
-│   ├── photo2.jpg      ← Angle légèrement différent
-│   └── photo3.jpg      ← 3-5 photos recommandées
+├── thomas_1.jpg        ← Format : nom_numero.jpg
+├── thomas_2.jpg
+├── marie_1.jpg
+└── marie_2.jpg
 ```
 
-### 2. Construire la whitelist
+Puis construire la whitelist :
 ```powershell
-.\venv\Scripts\Activate.ps1
-python -c "
-from src.face_recognition.encoder import FaceEncoder
-encoder = FaceEncoder()
-encoder.build_whitelist()
-encoder.save_whitelist()
-print('Whitelist construite !')
-"
+python tools/whitelist_capture.py --build
 ```
-
-### 3. Relancer le système
-```powershell
-python src/main.py
-```
-
-> **📌 Conseils photos :**
-> - 3 à 5 photos par personne
-> - Visage bien visible, éclairage correct
-> - Angles légèrement variés (face, 3/4)
-> - Formats acceptés : `.jpg`, `.jpeg`, `.png`
 
 ---
 

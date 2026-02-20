@@ -78,58 +78,133 @@ REM === Creer les dossiers necessaires ===
 if not exist "data\whitelist_photos" mkdir "data\whitelist_photos"
 if not exist "data\videos" mkdir "data\videos"
 
-REM === Verification finale ===
+REM === Verification ===
 echo.
-echo  ============================================================
-echo  [VERIFICATION] Test des modules...
-echo  ============================================================
 python -c "import torch; print(f'  PyTorch {torch.__version__} | CUDA: {torch.cuda.is_available()}')"
-python -c "from ultralytics import YOLO; print('  YOLOv8: OK')"
-echo.
 
-REM === Choisir la source ===
+:MENU
+echo.
 echo  ============================================================
-echo  CHOISIR LA SOURCE VIDEO :
+echo  MENU PRINCIPAL :
 echo  ============================================================
 echo.
-echo    [1] Webcam du PC (defaut)
-echo    [2] Camera d'un telephone (IP Webcam)
-echo    [3] Fichier video
+echo    [1] Lancer la surveillance (webcam PC)
+echo    [2] Lancer la surveillance (camera telephone USB)
+echo    [3] Lancer la surveillance (camera telephone Wi-Fi)
+echo    [4] Lancer la surveillance (fichier video)
+echo    [5] Capturer des visages (construire la whitelist)
+echo    [6] Benchmark performance
+echo    [7] Quitter
 echo.
-set /p CHOIX="  Votre choix (1/2/3) : "
+set /p CHOIX="  Votre choix (1-7) : "
+
+if "%CHOIX%"=="1" (
+    echo.
+    echo  [LANCEMENT] Webcam du PC
+    echo  Raccourcis : [Q] Quitter  [S] Statistiques
+    echo.
+    python src/main.py --source 0
+    goto MENU
+)
 
 if "%CHOIX%"=="2" (
     echo.
-    echo  Entrez l'URL du flux video de votre telephone.
-    echo  Exemple: http://192.168.1.42:8080/video
+    echo  ============================================================
+    echo  CAMERA TELEPHONE VIA USB
+    echo  ============================================================
     echo.
-    set /p URL_TEL="  URL : "
+    echo  1. Installer DroidCam (Android) ou EpocCam (iPhone)
+    echo  2. Installer le client DroidCam/EpocCam sur le PC
+    echo  3. Brancher le telephone en USB
+    echo  4. Lancer DroidCam Client sur le PC ^(USB mode^)
     echo.
-    echo  [LANCEMENT] Camera telephone : %URL_TEL%
-    echo  Appuyez sur 'q' dans la fenetre pour quitter
+    echo  Le telephone apparait comme webcam index 1, 2 ou 3.
     echo.
-    python src/main.py --source "%URL_TEL%"
-) else if "%CHOIX%"=="3" (
+    set /p USB_IDX="  Index de la camera USB (1, 2 ou 3) [defaut: 1] : "
+    if "%USB_IDX%"=="" set USB_IDX=1
     echo.
-    echo  Entrez le chemin du fichier video.
-    echo  Exemple: C:\Users\ilyas\Videos\test.mp4
+    echo  [LANCEMENT] Camera USB (index %USB_IDX%)
+    echo  Raccourcis : [Q] Quitter  [S] Statistiques
     echo.
-    set /p FICHIER="  Chemin : "
-    echo.
-    echo  [LANCEMENT] Fichier : %FICHIER%
-    echo  Appuyez sur 'q' dans la fenetre pour quitter
-    echo.
-    python src/main.py --source "%FICHIER%"
-) else (
-    echo.
-    echo  [LANCEMENT] Webcam du PC
-    echo  Appuyez sur 'q' dans la fenetre pour quitter
-    echo.
-    python src/main.py --source 0
+    python src/main.py --source %USB_IDX%
+    goto MENU
 )
 
-echo.
-echo  ============================================================
-echo  SESSION TERMINEE
-echo  ============================================================
-pause
+if "%CHOIX%"=="3" (
+    echo.
+    echo  ============================================================
+    echo  CAMERA TELEPHONE VIA WI-FI
+    echo  ============================================================
+    echo.
+    echo  1. Installer "IP Webcam" ou "DroidCam" sur le telephone
+    echo  2. Ouvrir l'app et demarrer le serveur
+    echo  3. PC et telephone sur le meme Wi-Fi
+    echo.
+    echo  Exemples d'URL :
+    echo    IP Webcam  : http://192.168.1.42:8080/video
+    echo    DroidCam   : http://192.168.1.42:4747/video
+    echo.
+    set /p URL_TEL="  URL du flux : "
+    echo.
+    echo  [LANCEMENT] Camera Wi-Fi
+    echo  Raccourcis : [Q] Quitter  [S] Statistiques
+    echo.
+    python src/main.py --source "%URL_TEL%"
+    goto MENU
+)
+
+if "%CHOIX%"=="4" (
+    echo.
+    set /p FICHIER="  Chemin du fichier video : "
+    echo.
+    echo  [LANCEMENT] Fichier video
+    echo.
+    python src/main.py --source "%FICHIER%"
+    goto MENU
+)
+
+if "%CHOIX%"=="5" (
+    echo.
+    echo  ============================================================
+    echo  CAPTURE DE VISAGES — Whitelist
+    echo  ============================================================
+    echo.
+    echo    [A] Capturer avec la webcam du PC
+    echo    [B] Capturer avec camera telephone (USB index)
+    echo    [C] Capturer avec camera telephone (Wi-Fi URL)
+    echo    [D] Construire la whitelist (sans camera)
+    echo.
+    set /p WL_CHOIX="  Votre choix (A/B/C/D) : "
+    
+    if /i "%WL_CHOIX%"=="A" (
+        python tools/whitelist_capture.py --source 0
+    ) else if /i "%WL_CHOIX%"=="B" (
+        set /p WL_USB="  Index USB (1, 2 ou 3) : "
+        python tools/whitelist_capture.py --source %WL_USB%
+    ) else if /i "%WL_CHOIX%"=="C" (
+        set /p WL_URL="  URL du flux : "
+        python tools/whitelist_capture.py --source "%WL_URL%"
+    ) else if /i "%WL_CHOIX%"=="D" (
+        python tools/whitelist_capture.py --build
+    )
+    goto MENU
+)
+
+if "%CHOIX%"=="6" (
+    echo.
+    echo  [BENCHMARK] Test de performance...
+    echo.
+    python tests/benchmark.py
+    echo.
+    pause
+    goto MENU
+)
+
+if "%CHOIX%"=="7" (
+    echo.
+    echo  Au revoir !
+    exit /b 0
+)
+
+echo  Choix invalide, reessayez.
+goto MENU
