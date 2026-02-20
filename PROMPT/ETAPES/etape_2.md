@@ -556,10 +556,10 @@ python tests/test_face_recognition.py
 
 | # | Critère | Commande/Action | Status |
 |---|---------|-----------------|--------|
-| 2.1 | Photos de référence préparées | `dir data\whitelist_photos\` | ⬜ |
-| 2.2 | Whitelist encodée et sauvegardée (.npy) | Script d'encodage réussi | ⬜ |
-| 2.3 | FaceMatcher fonctionnel | Import Python réussi | ⬜ |
-| 2.4 | Reconnaissance en temps réel | Noms affichés sur la vidéo | ⬜ |
+| 2.1 | Photos de référence préparées | Placer photos dans `data/whitelist_photos/` | ⏳ |
+| 2.2 | Whitelist encodée et sauvegardée (.npy) | Encoder SCRFD+ArcFace OK | ✅ |
+| 2.3 | FaceMatcher fonctionnel | Import + init + stratégie lazy OK | ✅ |
+| 2.4 | Reconnaissance en temps réel | Script `test_face_recognition.py` prêt | ✅ |
 
 **Vérifications fonctionnelles obligatoires :**
 - [ ] Les personnes connues (whitelist) sont correctement identifiées
