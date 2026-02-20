@@ -43,10 +43,11 @@ ACTION_LABELS = [
     "donner_un_coup",
     "immobile",
     "se_pencher",
+    "mains_en_l_air",
 ]
 
 # === ALERTES ===
-ALERT_ACTIONS = ["chute", "donner_un_coup"]  # Actions déclenchant une alerte
+ALERT_ACTIONS = ["chute", "donner_un_coup", "mains_en_l_air", "courir"]
 LOITERING_TIMEOUT = 300            # Secondes avant alerte de maraudage (5 min)
 PERSON_LOST_TIMEOUT = 300          # Secondes avant de considérer la personne partie
 
