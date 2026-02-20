@@ -1,1 +1,462 @@
-# CCTV_AI_DEEP_SECU
+# 🛡️ CCTV AI DEEP SECU — Système de Vidéosurveillance Intelligente
+
+Système de vidéosurveillance intelligent utilisant l'IA en temps réel : détection de personnes, suivi multi-cibles, reconnaissance faciale, analyse comportementale et alertes automatiques.
+
+---
+
+## 🚀 Lancement Rapide (1 seule commande)
+
+### Option 1 — Double-clic (Windows)
+```
+Double-cliquer sur : start.bat
+```
+Le script installe automatiquement tout ce qu'il faut et lance le système.
+
+### Option 2 — Terminal PowerShell
+```powershell
+cd C:\Users\ilyas\Documents\CCTV_AI_DEEP_SECU
+.\start.bat
+```
+
+> **C'est tout !** Le script vérifie Python, crée l'environnement virtuel, installe toutes les dépendances (PyTorch CUDA, YOLOv8, InsightFace...) et lance le système automatiquement.
+
+---
+
+## 📸 Sources Vidéo (2 options)
+
+### Option A — Caméra du PC (Webcam)
+
+C'est l'option par défaut. Le système utilise automatiquement la webcam intégrée :
+
+```powershell
+# Lancement automatique avec webcam
+.\start.bat
+
+# OU manuellement :
+.\venv\Scripts\Activate.ps1
+python src/main.py
+```
+
+### Option B — Caméra d'un Téléphone (via IP Webcam)
+
+Transformez votre téléphone Android/iPhone en caméra de surveillance :
+
+#### Étape 1 — Installer l'App sur le Téléphone
+
+| Plateforme | Application | Lien |
+|------------|-------------|------|
+| **Android** | **IP Webcam** (Pavel Khlebovich) | [Google Play](https://play.google.com/store/apps/details?id=com.pas.webcam) |
+| **iPhone** | **EpocCam** ou **DroidCam** | App Store |
+
+#### Étape 2 — Configurer l'App
+
+1. Ouvrir **IP Webcam** sur le téléphone
+2. Défiler vers le bas et appuyer sur **"Démarrer le serveur"**
+3. L'app affiche l'adresse du flux, par exemple : `http://192.168.1.42:8080`
+4. S'assurer que le **PC et le téléphone sont sur le même réseau Wi-Fi**
+
+#### Étape 3 — Lancer le système avec le flux du téléphone
+
+```powershell
+# Remplacer l'IP par celle affichée sur votre téléphone
+python src/main.py --source "http://192.168.1.42:8080/video"
+```
+
+> **💡 Astuce :** Pour DroidCam, l'URL est généralement `http://IP:4747/video`.
+> Pour EpocCam, suivre les instructions de l'app pour obtenir l'URL du flux.
+
+#### Étape 4 — Vérifier que ça fonctionne
+
+Si le flux ne se connecte pas :
+- Vérifier que le téléphone et le PC sont sur le **même réseau Wi-Fi**
+- Vérifier que le **pare-feu Windows** n'est pas bloquant
+- Essayer d'ouvrir `http://192.168.1.42:8080/video` dans le navigateur du PC
+
+---
+
+## 🖥️ Interface à l'Écran
+
+Le système affiche en temps réel :
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  FPS: 30.2                                               │
+│  Personnes: 2 | DB: 2 present(s) | Alertes: 0           │
+│                                                          │
+│    ┌─────────┐                                           │
+│    │  ID:1   │  ← Boîte englobante verte                 │
+│    │  Thomas │  ← Nom (reconnu par InsightFace)          │
+│    │  marcher│  ← Action (prédite par ST-GCN)            │
+│    │  🦴     │  ← Squelette 17 keypoints                 │
+│    └─────────┘                                           │
+│                                                          │
+│    ┌─────────┐                                           │
+│    │  ID:2   │                                           │
+│    │ INCONNU │  ← Personne non reconnue                  │
+│    │ immobile│                                           │
+│    └─────────┘                                           │
+│                                                          │
+│  ░░░░░░░ Zone de Maraudage (orange) ░░░░░░░              │
+│                                                          │
+│  🚨 ALERTE: MARAUDAGE ID:2 (312s)  ← Si timeout dépassé │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Informations affichées :**
+- **FPS** en haut à gauche (objectif ≥ 25 FPS)
+- **Compteurs** : nombre de personnes, présences en BDD, alertes
+- **Par personne** : boîte englobante, ID de suivi, nom, action en cours
+- **Squelette** : 17 points anatomiques reliés (COCO format)
+- **Zones de maraudage** : polygones orange semi-transparents
+- **Alertes** : bandeau rouge en cas de chute, coup ou maraudage
+
+**Raccourcis clavier :**
+
+| Touche | Action |
+|--------|--------|
+| `q` | Quitter le système proprement |
+| `s` | Afficher les statistiques détaillées dans la console |
+
+---
+
+## ⚙️ Options de Lancement
+
+```powershell
+# Webcam (défaut)
+python src/main.py
+
+# Fichier vidéo
+python src/main.py --source "C:\chemin\vers\video.mp4"
+
+# Caméra téléphone (IP Webcam)
+python src/main.py --source "http://192.168.1.42:8080/video"
+
+# Flux RTSP (caméra IP pro)
+python src/main.py --source "rtsp://user:pass@192.168.1.100:554/stream"
+
+# Mode headless (sans affichage, uniquement BDD)
+python src/main.py --no-display
+
+# Désactiver la reconnaissance faciale
+python src/main.py --no-face
+
+# Désactiver l'analyse ST-GCN
+python src/main.py --no-stgcn
+```
+
+---
+
+## 📋 Prérequis Système
+
+| Composant | Minimum | Recommandé |
+|-----------|---------|------------|
+| **OS** | Windows 10 | Windows 10/11 |
+| **Python** | 3.10 | 3.13 |
+| **GPU** | NVIDIA GTX 1060 (6 Go) | RTX 3080 Ti (12 Go) |
+| **RAM** | 8 Go | 16 Go |
+| **CUDA** | 11.8 | 12.1 |
+| **Pilotes NVIDIA** | 525+ | 545+ |
+
+> **⚠️ Le système fonctionne aussi sur CPU**, mais les performances seront très réduites (~5 FPS au lieu de 30+).
+
+---
+
+## 🏗️ Architecture du Système
+
+```
+┌── Thread 1 ──┐    Queue    ┌── Thread 2 ──┐              ┌── Analyzer ───┐
+│              │             │              │              │               │
+│  OpenCV      │──[frames]──▸│  YOLOv8-Pose │──[detects]──▸│  ST-GCN       │
+│  Capture     │             │  + ByteTrack │              │  InsightFace  │
+│  (async)     │             │              │              │  (lazy scan)  │
+└──────────────┘             └──────────────┘              └───────┬───────┘
+                                                                  │
+                                                                  ▼
+                                                          ┌───────────────┐
+                                                          │   SQLite DB   │
+                                                          │   Historique  │
+                                                          │   + Alertes   │
+                                                          └───────────────┘
+```
+
+### Modules Principaux
+
+| Module | Fichier | Rôle |
+|--------|---------|------|
+| **Détection** | `src/pipeline/detector.py` | YOLOv8-Pose : détection de personnes + extraction des 17 keypoints COCO |
+| **Suivi** | ByteTrack intégré | Suivi multi-cibles avec IDs persistants entre frames |
+| **Capture** | `src/pipeline/capture.py` | Thread de capture vidéo asynchrone (faible latence) |
+| **Reconnaissance** | `src/face_recognition/` | InsightFace : encodage facial + comparaison avec liste blanche |
+| **Analyse** | `src/behavior/` | ST-GCN : classification d'actions (marcher, chute, coup...) |
+| **Maraudage** | `src/behavior/loitering_detector.py` | Détection de stationnement prolongé dans une zone |
+| **Base de Données** | `src/database/db_manager.py` | SQLite : historique des présences + alertes |
+| **Analyseur** | `src/pipeline/analyzer.py` | Orchestre ST-GCN + InsightFace + maraudage + BDD |
+| **Affichage** | `src/utils/drawing.py` | Visualisation : boîtes, squelettes, labels, alertes |
+| **Config** | `src/config.py` | Configuration centralisée (seuils, chemins, paramètres) |
+
+---
+
+## 🧠 Technologies & IA
+
+### 1. Détection de Personnes — YOLOv8-Pose
+- **Modèle** : `yolov8m-pose.pt` (Medium, 26M paramètres)
+- **Sortie** : Boîte englobante + 17 keypoints COCO par personne
+- **Performance** : ~25ms/frame sur RTX 3080 Ti
+
+### 2. Suivi Multi-Cibles — ByteTrack
+- **Algorithme** : Association par IoU + Kalman Filter
+- **Avantage** : IDs stables même en cas d'occultation temporaire
+
+### 3. Reconnaissance Faciale — InsightFace
+- **Détection** : SCRFD (détecteur de visages haute précision)
+- **Encodage** : ArcFace (embedding 512D)
+- **Stratégie** : Scan paresseux (1 scan / 60 frames pour les inconnus)
+- **Whitelist** : Photos de référence dans `data/whitelist_photos/`
+
+### 4. Analyse Comportementale — ST-GCN
+- **Architecture** : Spatial Temporal Graph Convolutional Network
+- **Entrée** : Buffer de 30 frames de squelette (C, T, V) = (2, 30, 17)
+- **Sortie** : 8 actions classifiées
+
+**Actions détectées :**
+| Action | Description |
+|--------|-------------|
+| `marcher` | Marche normale |
+| `courir` | Course / mouvement rapide |
+| `s'asseoir` | Passage à la position assise |
+| `se_lever` | Passage à la position debout |
+| `chute` | ⚠️ Chute détectée (ALERTE) |
+| `donner_un_coup` | ⚠️ Violence détectée (ALERTE) |
+| `immobile` | Personne stationnaire |
+| `se_pencher` | Flexion du corps |
+
+### 5. Détection de Maraudage
+- **Méthode** : Polygone spatial + timer
+- **Seuil** : 5 minutes (300s) dans la zone → ALERTE
+- **Zones** : Configurables (par défaut : 60% central de l'image)
+
+### 6. Base de Données — SQLite
+- **Tables** : `presence_records` (entrées/sorties) + `alerts` (incidents)
+- **Fichier** : `src/database/cctv_records.db`
+
+---
+
+## 📁 Structure du Projet
+
+```
+CCTV_AI_DEEP_SECU/
+├── start.bat                    ← 🚀 LANCER ICI (double-clic)
+├── setup_env.bat                ← Installation seule
+├── requirements.txt             ← Dépendances Python
+├── README.md                    ← Ce fichier
+│
+├── src/
+│   ├── main.py                  ← Point d'entrée principal
+│   ├── config.py                ← Configuration centralisée
+│   │
+│   ├── pipeline/
+│   │   ├── capture.py           ← Thread capture vidéo async
+│   │   ├── detector.py          ← YOLOv8-Pose + ByteTrack
+│   │   └── analyzer.py          ← Orchestrateur d'analyse
+│   │
+│   ├── face_recognition/
+│   │   ├── encoder.py           ← SCRFD + ArcFace (InsightFace)
+│   │   └── matcher.py           ← Comparaison avec whitelist
+│   │
+│   ├── behavior/
+│   │   ├── skeleton_buffer.py   ← Buffer temporel (deque 30 frames)
+│   │   ├── action_classifier.py ← Interface ST-GCN
+│   │   └── loitering_detector.py← Maraudage par polygone
+│   │
+│   ├── models/
+│   │   └── stgcn/
+│   │       └── model.py         ← Architecture ST-GCN (PyTorch)
+│   │
+│   ├── database/
+│   │   └── db_manager.py        ← CRUD SQLite
+│   │
+│   └── utils/
+│       └── drawing.py           ← Visualisation OpenCV
+│
+├── tests/
+│   ├── test_detector.py         ← Test détection + suivi
+│   ├── test_face_recognition.py ← Test reconnaissance faciale
+│   ├── test_database.py         ← Test base de données
+│   ├── test_stgcn.py            ← Test analyse comportementale
+│   └── benchmark.py             ← Benchmark performance GPU
+│
+├── data/
+│   ├── videos/                  ← Vidéos de test
+│   └── whitelist_photos/        ← Photos pour la reconnaissance
+│       ├── Thomas/              ← Dossier par personne
+│       │   ├── photo1.jpg
+│       │   └── photo2.jpg
+│       └── Marie/
+│           └── photo1.jpg
+│
+└── PROMPT/
+    └── ETAPES/                  ← Documentation technique détaillée
+        ├── overview.md
+        ├── etape_0.md → etape_5.md
+```
+
+---
+
+## 👤 Reconnaissance Faciale — Ajouter des Personnes
+
+Pour que le système reconnaisse des personnes :
+
+### 1. Ajouter des photos
+```
+data/whitelist_photos/
+├── NomDeLaPersonne/
+│   ├── photo1.jpg      ← Visage de face, bien éclairé
+│   ├── photo2.jpg      ← Angle légèrement différent
+│   └── photo3.jpg      ← 3-5 photos recommandées
+```
+
+### 2. Construire la whitelist
+```powershell
+.\venv\Scripts\Activate.ps1
+python -c "
+from src.face_recognition.encoder import FaceEncoder
+encoder = FaceEncoder()
+encoder.build_whitelist()
+encoder.save_whitelist()
+print('Whitelist construite !')
+"
+```
+
+### 3. Relancer le système
+```powershell
+python src/main.py
+```
+
+> **📌 Conseils photos :**
+> - 3 à 5 photos par personne
+> - Visage bien visible, éclairage correct
+> - Angles légèrement variés (face, 3/4)
+> - Formats acceptés : `.jpg`, `.jpeg`, `.png`
+
+---
+
+## 🧪 Tests Individuels
+
+Chaque module peut être testé indépendamment :
+
+```powershell
+.\venv\Scripts\Activate.ps1
+
+# Test détection + suivi (webcam)
+python tests/test_detector.py
+
+# Test reconnaissance faciale
+python tests/test_face_recognition.py
+
+# Test base de données
+python tests/test_database.py
+
+# Test analyse comportementale (ST-GCN)
+python tests/test_stgcn.py
+
+# Benchmark performance GPU
+python tests/benchmark.py
+```
+
+---
+
+## ⚡ Performance & Optimisation
+
+### Benchmark sur RTX 3080 Ti
+
+| Métrique | Valeur |
+|----------|--------|
+| YOLO-Pose | ~20 ms/frame |
+| FPS global | 25-35 FPS |
+| Mémoire GPU | ~3-4 Go / 12 Go |
+
+### Ajuster les Performances
+
+Modifier `src/config.py` :
+
+```python
+# Réduire la résolution (plus rapide)
+VIDEO_WIDTH = 1280     # Au lieu de 1920
+VIDEO_HEIGHT = 720     # Au lieu de 1080
+
+# Réduire la fréquence d'analyse ST-GCN
+STGCN_INFERENCE_INTERVAL = 10  # Au lieu de 5
+
+# Réduire la fréquence de scan facial
+FACE_RECOGNITION_INTERVAL = 120  # Au lieu de 60
+```
+
+---
+
+## 🗄️ Base de Données
+
+Le système enregistre automatiquement tout dans `src/database/cctv_records.db`.
+
+### Tables
+
+**`presence_records`** — Historique des présences :
+| Champ | Description |
+|-------|-------------|
+| `track_id` | ID de suivi |
+| `name` | Nom (ou INCONNU) |
+| `entry_time` | Date/heure d'entrée |
+| `exit_time` | Date/heure de sortie |
+| `duration_s` | Durée de présence (secondes) |
+| `status` | `PRESENT` ou `SORTI` |
+| `alert_flag` | 1 si alerte déclenchée |
+
+**`alerts`** — Journal des alertes :
+| Champ | Description |
+|-------|-------------|
+| `alert_type` | Type (chute, donner_un_coup, MARAUDAGE) |
+| `confidence` | Score de confiance |
+| `name` | Nom de la personne |
+| `timestamp` | Date/heure de l'alerte |
+
+### Consulter les données
+```powershell
+.\venv\Scripts\Activate.ps1
+python -c "
+from src.database.db_manager import DatabaseManager
+db = DatabaseManager()
+print('Présences:', db.get_history(limit=10))
+print('Alertes:', db.get_alerts(limit=10))
+print('Stats:', db.get_stats())
+db.close()
+"
+```
+
+---
+
+## 🔧 Dépannage
+
+| Problème | Solution |
+|----------|----------|
+| `CUDA not available` | Installer les pilotes NVIDIA + CUDA Toolkit 12.1 |
+| `No module named 'torch'` | Lancer `start.bat` ou `setup_env.bat` |
+| Webcam non détectée | Vérifier les permissions caméra dans Paramètres Windows |
+| FPS très bas (<10) | Réduire la résolution à 720p dans `config.py` |
+| `InsightFace error` | Normal si pas de photos dans `data/whitelist_photos/` |
+| Flux téléphone ne se connecte pas | Vérifier que PC + téléphone sont sur le même Wi-Fi |
+| `ONNX Runtime error` | Exécuter : `pip install onnxruntime` |
+
+---
+
+## 📜 Licence
+
+MIT — Voir [LICENSE](LICENSE)
+
+---
+
+## 👨‍💻 Auteur
+
+**Ilyas** — Projet CCTV AI Deep Security
+
+---
+
+*Développé avec PyTorch, YOLOv8, InsightFace, ST-GCN et beaucoup de ☕*

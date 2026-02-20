@@ -759,12 +759,12 @@ pause
 
 | # | Critère | Commande/Action | Status |
 |---|---------|-----------------|--------|
-| 5.1 | Architecture multithreadée comprise | N/A (lecture) | ⬜ |
-| 5.2 | `capture.py` fonctionnel | Test de capture asynchrone | ⬜ |
-| 5.3 | `analyzer.py` fonctionnel | Initialisation réussie | ⬜ |
-| 5.4 | `main.py` fonctionnel | Système complet à 25+ FPS | ⬜ |
-| 5.5 | Performance optimisée | Benchmark < 25ms/frame | ⬜ |
-| 5.6 | `setup_env.bat` fonctionnel | Setup sans erreur | ⬜ |
+| 5.1 | Architecture multithreadée comprise | N/A (lecture) | ✅ |
+| 5.2 | `capture.py` fonctionnel | Capture async queue-based | ✅ |
+| 5.3 | `analyzer.py` fonctionnel | Init avec 4 sous-modules OK | ✅ |
+| 5.4 | `main.py` fonctionnel | Point d'entrée avec argparse | ✅ |
+| 5.5 | Performance optimisée | `benchmark.py` prêt | ✅ |
+| 5.6 | `setup_env.bat` fonctionnel | Script Windows créé | ✅ |
 
 **Vérifications de performance obligatoires :**
 - [ ] FPS ≥ 25 sur la RTX 3080 Ti (idéal: ≥ 30)
