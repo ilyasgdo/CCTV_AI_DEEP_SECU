@@ -3,6 +3,7 @@ CCTV AI DEEP SECU — Configuration Centralisée
 Toutes les constantes et paramètres du système sont ici.
 """
 import os
+import platform
 from pathlib import Path
 
 # === CHEMINS ===
@@ -14,10 +15,25 @@ DB_PATH = PROJECT_ROOT / "src" / "database" / "cctv_records.db"
 STGCN_WEIGHTS = PROJECT_ROOT / "src" / "models" / "stgcn" / "weights"
 YOLO_WEIGHTS = PROJECT_ROOT / "src" / "models" / "yolo" / "weights"
 
+# === DÉTECTION AUTOMATIQUE DU GPU ===
+def _detect_device():
+    """Détecte le meilleur device : CUDA (NVIDIA) > MPS (Apple M) > CPU."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return 0  # NVIDIA GPU
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return "mps"  # Apple Silicon
+    except ImportError:
+        pass
+    return "cpu"
+
+DEVICE = _detect_device()
+
 # === YOLO-POSE ===
 YOLO_MODEL = "yolov8m-pose.pt"  # Medium. Changer en "yolov8l-pose.pt" pour Large
 YOLO_CONFIDENCE = 0.5            # Seuil de confiance minimum
-YOLO_DEVICE = 0                  # 0 = premier GPU, "cpu" pour CPU
+YOLO_DEVICE = DEVICE             # Auto-détecté : 0 (CUDA), "mps" (Apple M), "cpu"
 
 # === BYTETRACK (Suivi) ===
 TRACKER_TYPE = "bytetrack"        # Tracker intégré à Ultralytics

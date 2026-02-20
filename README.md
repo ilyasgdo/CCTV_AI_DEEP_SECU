@@ -1,24 +1,30 @@
 # 🛡️ CCTV AI DEEP SECU — Système de Vidéosurveillance Intelligente
 
-Système de vidéosurveillance intelligent utilisant l'IA en temps réel : détection de personnes, suivi multi-cibles, reconnaissance faciale, analyse comportementale et alertes automatiques.
+Système de vidéosurveillance intelligent utilisant l'IA en temps réel : détection de personnes, suivi multi-cibles, reconnaissance faciale, détection d'objets portés, analyse comportementale et alertes automatiques.
+
+**Compatible Windows (NVIDIA CUDA) + macOS (Apple Silicon M1/M2/M3/M4)**
 
 ---
 
 ## 🚀 Lancement Rapide (1 seule commande)
 
-### Option 1 — Double-clic (Windows)
-```
-Double-cliquer sur : start.bat
-```
-Le script installe automatiquement tout ce qu'il faut et lance le système.
+### 🖥️ Windows (NVIDIA GPU)
 
-### Option 2 — Terminal PowerShell
+**Double-clic** sur `start.bat` — ou en terminal :
 ```powershell
 cd C:\Users\ilyas\Documents\CCTV_AI_DEEP_SECU
 .\start.bat
 ```
 
-> **C'est tout !** Le script vérifie Python, crée l'environnement virtuel, installe toutes les dépendances (PyTorch CUDA, YOLOv8, InsightFace...) et lance le système automatiquement.
+### 🍎 macOS (Apple Silicon M1/M2/M3/M4)
+
+```bash
+cd /chemin/vers/CCTV_AI_DEEP_SECU
+chmod +x start_mac.sh
+./start_mac.sh
+```
+
+> **C'est tout !** Le script détecte automatiquement le GPU (CUDA ou MPS), crée l'environnement virtuel, installe toutes les dépendances et lance le système.
 
 ---
 
@@ -173,6 +179,7 @@ python src/main.py --no-stgcn
 
 ## 📋 Prérequis Système
 
+### Windows
 | Composant | Minimum | Recommandé |
 |-----------|---------|------------|
 | **OS** | Windows 10 | Windows 10/11 |
@@ -180,7 +187,14 @@ python src/main.py --no-stgcn
 | **GPU** | NVIDIA GTX 1060 (6 Go) | RTX 3080 Ti (12 Go) |
 | **RAM** | 8 Go | 16 Go |
 | **CUDA** | 11.8 | 12.1 |
-| **Pilotes NVIDIA** | 525+ | 545+ |
+
+### macOS
+| Composant | Minimum | Recommandé |
+|-----------|---------|------------|
+| **OS** | macOS 13 Ventura | macOS 14 Sonoma+ |
+| **Python** | 3.10 | 3.12 |
+| **Puce** | Apple M1 (8 Go) | Apple M2 Pro+ (16 Go) |
+| **RAM** | 8 Go | 16 Go |
 
 > **⚠️ Le système fonctionne aussi sur CPU**, mais les performances seront très réduites (~5 FPS au lieu de 30+).
 
@@ -238,24 +252,30 @@ python src/main.py --no-stgcn
 - **Stratégie** : Scan paresseux (1 scan / 60 frames pour les inconnus)
 - **Whitelist** : Photos de référence dans `data/whitelist_photos/`
 
-### 4. Analyse Comportementale — ST-GCN
-- **Architecture** : Spatial Temporal Graph Convolutional Network
-- **Entrée** : Buffer de 30 frames de squelette (C, T, V) = (2, 30, 17)
-- **Sortie** : 8 actions classifiées
+### 4. Analyse Comportementale — Analyse Géométrique des Poses
+- **Méthode** : Règles géométriques sur les 17 keypoints COCO
+- **Entrée** : Buffer de 15 frames de positions
+- **Sortie** : 9 actions classifiées + alertes automatiques
 
 **Actions détectées :**
 | Action | Description |
 |--------|-------------|
-| `marcher` | Marche normale |
-| `courir` | Course / mouvement rapide |
-| `s'asseoir` | Passage à la position assise |
-| `se_lever` | Passage à la position debout |
-| `chute` | ⚠️ Chute détectée (ALERTE) |
-| `donner_un_coup` | ⚠️ Violence détectée (ALERTE) |
 | `immobile` | Personne stationnaire |
+| `marcher` | Marche normale |
+| `courir` | ⚠️ Course / mouvement rapide (ALERTE) |
+| `s'asseoir` | Position assise |
 | `se_pencher` | Flexion du corps |
+| `chute` | 🚨 Chute détectée (ALERTE) |
+| `donner_un_coup` | 🚨 Violence détectée (ALERTE) |
+| `mains_en_l_air` | 🚨 Mains en l'air (ALERTE) |
 
-### 5. Détection de Maraudage
+### 5. Détection d'Objets Portés — YOLOv8n
+- **Modèle** : `yolov8n.pt` (Nano, ultra-rapide) sur les crops de personnes
+- **Classes** : 80 classes COCO (téléphone, sac, couteau, bouteille...)
+- **Cadence** : Toutes les 3 frames
+- **Alertes** : Objets dangereux (🔪 couteau, ✂️ ciseaux, 🏓 batte)
+
+### 6. Détection de Maraudage
 - **Méthode** : Polygone spatial + timer
 - **Seuil** : 5 minutes (300s) dans la zone → ALERTE
 - **Zones** : Configurables (par défaut : 60% central de l'image)
@@ -270,8 +290,9 @@ python src/main.py --no-stgcn
 
 ```
 CCTV_AI_DEEP_SECU/
-├── start.bat                    ← 🚀 LANCER ICI (double-clic)
-├── setup_env.bat                ← Installation seule
+├── start.bat                    ← 🚀 LANCER ICI (Windows, double-clic)
+├── start_mac.sh                 ← 🍎 LANCER ICI (macOS Apple Silicon)
+├── setup_env.bat                ← Installation seule (Windows)
 ├── requirements.txt             ← Dépendances Python
 ├── README.md                    ← Ce fichier
 │
@@ -282,6 +303,7 @@ CCTV_AI_DEEP_SECU/
 │   ├── pipeline/
 │   │   ├── capture.py           ← Thread capture vidéo async
 │   │   ├── detector.py          ← YOLOv8-Pose + ByteTrack
+│   │   ├── object_detector.py   ← YOLOv8n détection d'objets portés
 │   │   └── analyzer.py          ← Orchestrateur d'analyse
 │   │
 │   ├── face_recognition/
@@ -497,4 +519,4 @@ MIT — Voir [LICENSE](LICENSE)
 
 ---
 
-*Développé avec PyTorch, YOLOv8, InsightFace, ST-GCN et beaucoup de ☕*
+*Développé avec PyTorch, YOLOv8, InsightFace, et beaucoup de ☕*
