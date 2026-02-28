@@ -30,18 +30,22 @@ REM Activer
 call venv\Scripts\activate.bat
 
 REM Installer les dependances
-echo [2/4] Installation de PyTorch avec CUDA...
+echo [2/5] Installation de PyTorch avec CUDA...
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-echo [3/4] Installation des dependances...
+echo [3/5] Installation des dependances principales...
 pip install -r requirements.txt
 
-echo [4/4] Verification...
+echo [4/5] Installation des modules complementaires (IA, voix, dashboard)...
+pip install flask edge-tts openai-whisper pyaudio requests fpdf2 scipy matplotlib
+
+echo [5/5] Verification...
 python -c "import torch; print(f'PyTorch {torch.__version__} - CUDA: {torch.cuda.is_available()}')"
+python -c "import flask; import edge_tts; print('Modules complementaires OK')"
 
 echo.
 echo ============================================
 echo   Setup termine !
-echo   Pour lancer : python src/main.py
+echo   Pour lancer : start.bat
 echo ============================================
 pause

@@ -39,9 +39,9 @@ YOLO_DEVICE = DEVICE             # Auto-détecté : 0 (CUDA), "mps" (Apple M), "
 TRACKER_TYPE = "bytetrack"        # Tracker intégré à Ultralytics
 
 # === INSIGHTFACE ===
-FACE_RECOGNITION_THRESHOLD = 0.55  # Seuil de similarité cosinus
-FACE_RECOGNITION_INTERVAL = 60     # Frames entre chaque scan pour un INCONNU (~2s à 30fps)
-FACE_CONFIDENCE_LOCK = 0.95        # Au-dessus, on arrête de scanner
+FACE_RECOGNITION_THRESHOLD = 0.45  # Seuil de similarité cosinus
+FACE_RECOGNITION_INTERVAL = 15     # Frames entre chaque scan pour un INCONNU (~3s à 5fps)
+FACE_CONFIDENCE_LOCK = 0.60        # Au-dessus, on arrête de scanner
 
 # === ST-GCN ===
 STGCN_BUFFER_SIZE = 30            # Nombre de frames dans le buffer temporel
@@ -71,3 +71,15 @@ PERSON_LOST_TIMEOUT = 300          # Secondes avant de considérer la personne p
 TARGET_FPS = 30
 VIDEO_WIDTH = 1920
 VIDEO_HEIGHT = 1080
+
+# === AI GUARD (Agent de Sécurité IA) ===
+OLLAMA_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2"
+GUARD_STT_MODEL = "base"           # Whisper model: tiny, base, small, medium
+GUARD_LISTEN_DURATION = 5          # Secondes d'écoute micro
+GUARD_TRIGGER_INTERVAL = 15       # Secondes min entre interventions
+
+# === VISION MODEL (Analyse de frames) ===
+VISION_MODEL = "moondream"          # Modèle vision Ollama (léger, 1.8B)
+VISION_ANALYSIS_INTERVAL = 10      # Secondes entre chaque analyse de frame
+VISION_ENABLED = True              # Activer/désactiver l'analyse de frames

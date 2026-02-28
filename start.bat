@@ -69,9 +69,19 @@ pip show onnxruntime >NUL 2>&1
 if %ERRORLEVEL% NEQ 0 (
     pip show onnxruntime-gpu >NUL 2>&1
     if %ERRORLEVEL% NEQ 0 (
-        echo  [4/4] Installation de onnxruntime...
+        echo  [4/5] Installation de onnxruntime...
         pip install onnxruntime
     )
+)
+
+REM === Installer les modules complementaires (Dashboard, TTS, STT, AI Guard) ===
+pip show flask >NUL 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo  [5/5] Installation des modules complementaires (IA, voix, dashboard)...
+    pip install flask edge-tts openai-whisper pyaudio requests fpdf2 scipy matplotlib
+    echo  [OK] Modules complementaires installes
+) else (
+    echo  [OK] Modules complementaires deja installes
 )
 
 REM === Creer les dossiers necessaires ===

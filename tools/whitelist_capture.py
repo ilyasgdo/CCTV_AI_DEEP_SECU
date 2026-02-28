@@ -1,3 +1,4 @@
+#!/Users/ilyas/CCTV_AI_DEEP_SECU/venv/bin/python3
 """
 CCTV AI DEEP SECU — Outil de Capture de Visages pour la Whitelist
 

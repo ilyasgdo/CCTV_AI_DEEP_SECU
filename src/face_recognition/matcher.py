@@ -101,16 +101,22 @@ class FaceMatcher:
         # Comparer avec la whitelist
         best_name = "INCONNU"
         best_score = 0.0
+        all_scores = {}
 
         for name, ref_emb in self.whitelist.items():
             # Similarité cosinus
             score = float(np.dot(query_emb, ref_emb))
+            all_scores[name] = score
             if score > best_score:
                 best_score = score
                 best_name = name
 
         # Seuil de reconnaissance
         if best_score < FACE_RECOGNITION_THRESHOLD:
+            # Debug: afficher les scores pour diagnostiquer
+            scores_str = ", ".join(f"{n}:{s:.3f}" for n, s in all_scores.items())
+            print(f"  [FACE] ID:{track_id} → sous seuil ({FACE_RECOGNITION_THRESHOLD}) "
+                  f"| scores: {scores_str}")
             result = ("INCONNU", best_score)
         else:
             result = (best_name, best_score)

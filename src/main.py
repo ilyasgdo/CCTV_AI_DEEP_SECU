@@ -42,6 +42,7 @@ from src.pipeline.detector import PoseDetector
 from src.pipeline.analyzer import Analyzer
 from src.behavior.people_counter import PeopleCounter
 from src.behavior.identification_request import IdentificationRequester
+from src.behavior.ai_guard import AISecurityGuard
 from src.utils.heatmap import MovementHeatmap
 from src.utils.clip_recorder import ClipRecorder
 from src.utils.drawing import (
@@ -79,6 +80,8 @@ def parse_args():
                         help="Port du dashboard web (défaut: 5555)")
     parser.add_argument("--no-clips", action="store_true",
                         help="Désactiver l'enregistrement de clips")
+    parser.add_argument("--no-guard", action="store_true",
+                        help="Désactiver l'agent de sécurité IA (Ollama)")
     parser.add_argument("--report", action="store_true",
                         help="Générer un rapport PDF à la fin de la session")
     return parser.parse_args()
@@ -157,7 +160,7 @@ def main():
     print("=" * 60)
 
     # === INITIALISATION ===
-    steps = 8
+    steps = 9
     step = 1
 
     print(f"\n[{step}/{steps}] Initialisation de la capture vidéo...")
@@ -195,6 +198,22 @@ def main():
     id_requester = IdentificationRequester(
         delay=10.0, cooldown=30.0, voice_enabled=True
     )
+    step += 1
+
+    # AI Guard (Agent de Sécurité IA)
+    ai_guard = None
+    if not args.no_guard:
+        print(f"\n[{step}/{steps}] Initialisation de l'agent de sécurité IA...")
+        ai_guard = AISecurityGuard()
+        if not ai_guard.available:
+            print("  ⚠ AI Guard désactivé (Ollama non disponible)")
+            ai_guard = None
+        else:
+            # Désactiver la voix de l'IdentificationRequester
+            # car l'AI Guard gère désormais l'interpellation vocale
+            id_requester.voice_enabled = False
+            id_requester._tts_available = False
+            print("  [ID-REQUEST] Voix désactivée (gérée par AI Guard)")
     step += 1
 
     # Clip recorder
@@ -251,6 +270,8 @@ def main():
     print("  ✅ SYSTÈME PRÊT — Appuyez sur 'q' pour quitter")
     print("  📊 [S] Stats  [P] Panel  [H] Heatmap  [C] Compteur")
     print("  🔊 [I] Identification  [R] Reset heatmap")
+    if ai_guard:
+        print("  🤖 [G] Agent IA  — AI Guard ACTIVÉ")
     if clip_recorder:
         print("  🎬 Clips d'alertes : ACTIVÉ (auto)")
     if not args.no_dashboard:
@@ -265,6 +286,7 @@ def main():
     show_heatmap = False
     show_counter = True
     show_id_request = True
+    show_ai_guard = True
 
     # Tracking des alertes pour les clips
     session_alerts = []
@@ -299,6 +321,14 @@ def main():
             # 8. Vérifier les inconnus (demande d'identification)
             if show_id_request:
                 id_requester.update(detections, analyzer.face_matcher)
+
+            # 9. AI Guard — Agent de sécurité IA
+            if ai_guard and show_ai_guard:
+                person_stats = analyzer.get_person_stats()
+                results_guard = analyzer.get_results()
+                ai_guard.update(detections, person_stats, results_guard)
+                # Analyse vision périodique (frame → moondream)
+                ai_guard.update_frame(frame)
 
             # 9. Vérifier les alertes → déclencher le clip
             if clip_recorder:
@@ -386,6 +416,10 @@ def main():
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                     (0, 0, 255), 2, cv2.LINE_AA)
 
+                # AI Guard overlay
+                if ai_guard and show_ai_guard:
+                    annotated = ai_guard.draw(annotated)
+
                 # Panneau latéral
                 if show_panel:
                     annotated = draw_side_panel(annotated, person_stats)
@@ -409,6 +443,9 @@ def main():
                 elif key == ord('i'):
                     show_id_request = not show_id_request
                     print(f"  [ID-REQUEST] {'Activé' if show_id_request else 'Désactivé'}")
+                elif key == ord('g'):
+                    show_ai_guard = not show_ai_guard
+                    print(f"  [AI-GUARD] {'Activé' if show_ai_guard else 'Désactivé'}")
                 elif key == ord('s'):
                     print(f"\n{'='*60}")
                     stats = analyzer.get_stats()

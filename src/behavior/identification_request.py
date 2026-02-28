@@ -11,6 +11,11 @@ import cv2
 import time
 import math
 import threading
+import tempfile
+import subprocess
+import asyncio
+import os
+import platform
 import numpy as np
 from typing import Dict, Set, Tuple, Optional
 
@@ -49,8 +54,8 @@ class IdentificationRequester:
         # Noms déjà accueillis dans cette session (éviter doublons)
         self._greeted_names: Set[str] = set()
 
-        # TTS engine
-        self._tts_engine = None
+        # TTS engine (Edge-TTS)
+        self._tts_available = False
         self._tts_lock = threading.Lock()
         self._tts_busy = False
 
@@ -61,33 +66,50 @@ class IdentificationRequester:
               f"voix={'ON' if voice_enabled else 'OFF'})")
 
     def _init_tts(self):
-        """Initialise le moteur TTS."""
+        """Initialise Edge-TTS (voix neuronale Microsoft)."""
         try:
-            import pyttsx3
-            self._tts_engine = pyttsx3.init()
-            voices = self._tts_engine.getProperty('voices')
-            for v in voices:
-                if 'french' in v.name.lower() or 'fr' in v.id.lower():
-                    self._tts_engine.setProperty('voice', v.id)
-                    break
-            self._tts_engine.setProperty('rate', 160)
-            self._tts_engine.setProperty('volume', 1.0)
-            print("[ID-REQUEST] TTS initialisé ✓")
-        except Exception as e:
-            print(f"[ID-REQUEST] ⚠ TTS non disponible ({e})")
-            self._tts_engine = None
+            import edge_tts
+            self._tts_available = True
+            self._tts_voice = "fr-FR-HenriNeural"
+            print(f"[ID-REQUEST] TTS initialisé ✓ (Edge-TTS, voix: {self._tts_voice})")
+        except ImportError:
+            print("[ID-REQUEST] ⚠ edge-tts non installé (pip install edge-tts)")
+            self._tts_available = False
 
     def _speak_async(self, text: str):
-        """Annonce vocale dans un thread séparé."""
-        if not self._tts_engine or self._tts_busy:
+        """Annonce vocale via Edge-TTS dans un thread séparé."""
+        if not self._tts_available or self._tts_busy:
             return
 
         def _speak():
             self._tts_busy = True
             try:
+                import edge_tts
+
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    temp_path = f.name
+
+                async def _generate():
+                    communicate = edge_tts.Communicate(text, self._tts_voice)
+                    await communicate.save(temp_path)
+
+                loop = asyncio.new_event_loop()
+                loop.run_until_complete(_generate())
+                loop.close()
+
                 with self._tts_lock:
-                    self._tts_engine.say(text)
-                    self._tts_engine.runAndWait()
+                    if platform.system() == "Darwin":
+                        subprocess.run(["afplay", temp_path],
+                                       capture_output=True, timeout=15)
+                    elif platform.system() == "Windows":
+                        subprocess.run(["powershell", "-c",
+                                        f'(New-Object Media.SoundPlayer "{temp_path}").PlaySync()'],
+                                       capture_output=True, timeout=15)
+                    else:
+                        subprocess.run(["aplay", temp_path],
+                                       capture_output=True, timeout=15)
+
+                os.unlink(temp_path)
             except Exception:
                 pass
             finally:
@@ -336,5 +358,5 @@ class IdentificationRequester:
             "tracked_unknowns": len(self._unknown_since),
             "active_alerts": len(self._active_alerts),
             "greeted_persons": list(self._greeted_names),
-            "tts_available": self._tts_engine is not None,
+            "tts_available": self._tts_available,
         }

@@ -47,8 +47,17 @@ if [ ! -d "venv" ]; then
     echo -e "${YELLOW}[SETUP] Première exécution — Installation automatique...${NC}"
     echo ""
 
+    # Vérifier/installer portaudio (nécessaire pour PyAudio/micro)
+    if ! brew list portaudio &>/dev/null; then
+        echo -e "  ${CYAN}[1/6]${NC} Installation de PortAudio (microphone)..."
+        brew install portaudio --quiet
+        echo -e "  ${GREEN}✅ PortAudio installé${NC}"
+    else
+        echo -e "  ${CYAN}[1/6]${NC} PortAudio déjà installé ✅"
+    fi
+
     # Créer le venv
-    echo -e "  ${CYAN}[1/4]${NC} Création de l'environnement virtuel..."
+    echo -e "  ${CYAN}[2/6]${NC} Création de l'environnement virtuel..."
     $PYTHON -m venv venv
     echo -e "  ${GREEN}✅ venv créé${NC}"
 
@@ -56,22 +65,28 @@ if [ ! -d "venv" ]; then
     source venv/bin/activate
 
     # Mettre à jour pip
-    echo -e "  ${CYAN}[2/4]${NC} Mise à jour de pip..."
+    echo -e "  ${CYAN}[3/6]${NC} Mise à jour de pip..."
     pip install --upgrade pip --quiet
 
     # Installer PyTorch pour Apple Silicon (MPS)
-    echo -e "  ${CYAN}[3/4]${NC} Installation de PyTorch (Apple Silicon MPS)..."
+    echo -e "  ${CYAN}[4/6]${NC} Installation de PyTorch (Apple Silicon MPS)..."
     pip install torch torchvision --quiet
     echo -e "  ${GREEN}✅ PyTorch installé${NC}"
 
-    # Installer les dépendances
-    echo -e "  ${CYAN}[4/4]${NC} Installation des dépendances..."
+    # Installer les dépendances principales
+    echo -e "  ${CYAN}[5/6]${NC} Installation des dépendances (détection, reconnaissance faciale)..."
     pip install ultralytics opencv-python numpy insightface==0.2.1 onnxruntime --quiet
-    echo -e "  ${GREEN}✅ Toutes les dépendances installées${NC}"
+    echo -e "  ${GREEN}✅ Dépendances principales installées${NC}"
+
+    # Installer les modules complémentaires (Dashboard, TTS, STT, AI Guard)
+    echo -e "  ${CYAN}[6/6]${NC} Installation des modules complémentaires (IA, voix, dashboard)..."
+    pip install flask edge-tts openai-whisper pyaudio requests fpdf2 scipy matplotlib --quiet
+    echo -e "  ${GREEN}✅ Tous les modules installés${NC}"
 
     # Créer les dossiers nécessaires
     mkdir -p data/whitelist_photos
     mkdir -p data/videos
+    mkdir -p data/clips
     mkdir -p src/database
 
     echo ""
@@ -81,6 +96,18 @@ if [ ! -d "venv" ]; then
 else
     # Activer le venv existant
     source venv/bin/activate
+
+    # Vérifier que les modules complémentaires sont installés
+    $PYTHON -c "import flask; import edge_tts; import whisper; import pyaudio" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "${YELLOW}[MISE À JOUR] Installation des modules manquants...${NC}"
+        # PortAudio
+        if ! brew list portaudio &>/dev/null; then
+            brew install portaudio --quiet
+        fi
+        pip install flask edge-tts openai-whisper pyaudio requests fpdf2 scipy matplotlib --quiet
+        echo -e "${GREEN}✅ Modules mis à jour${NC}"
+    fi
 fi
 
 # === Vérifier MPS ===
