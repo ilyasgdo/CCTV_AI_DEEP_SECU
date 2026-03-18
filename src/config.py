@@ -47,7 +47,7 @@ FACE_CONFIDENCE_LOCK = 0.60        # Au-dessus, on arrête de scanner
 STGCN_BUFFER_SIZE = 30            # Nombre de frames dans le buffer temporel
 STGCN_INFERENCE_INTERVAL = 5     # Inférence toutes les N frames
 STGCN_NUM_KEYPOINTS = 17          # Keypoints COCO (sortie YOLOv8-Pose)
-STGCN_IN_CHANNELS = 2             # X, Y (ou 3 si on ajoute la confiance)
+STGCN_IN_CHANNELS = 3             # X, Y, Confidence
 
 # === ACTIONS RECONNUES ===
 ACTION_LABELS = [

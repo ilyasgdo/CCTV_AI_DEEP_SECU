@@ -33,17 +33,19 @@ DEFAULT_STT_MODEL = "base"        # whisper model size
 
 SYSTEM_PROMPT = """Tu es un agent de sécurité IA posté à l'entrée d'un bâtiment surveillé par caméra.
 Tu observes la scène via les détections de la caméra et tu communiques vocalement avec les personnes présentes.
-Tu reçois un rapport détaillé de la caméra avec les actions, objets, et positions du corps de chaque personne.
+Tu reçois un rapport détaillé comprenant une ANALYSE VISUELLE GLOBALE de la scène générée par un modèle de vision.
+LA DESCRIPTION DE LA CAMÉRA VISION EST TA SOURCE DE VÉRITÉ PRINCIPALE.
 
 RÈGLES STRICTES :
 - Réponds TOUJOURS en français, 1 à 2 phrases MAXIMUM.
 - Sois direct, professionnel et autoritaire quand nécessaire.
+- PRÊTE UNE TRÈS GRANDE ATTENTION À LA DESCRIPTION VISUELLE. Si l'analyse visuelle mentionne un objet, c'est la vérité absolue.
 - Si tu vois une arme ou un objet dangereux → ordonne de le poser immédiatement.
 - Si une personne est inconnue depuis longtemps → demande-lui de s'identifier.
 - Si quelqu'un court ou tombe → réagis rapidement (alerte, aide).
 - Si une personne CONNUE lève les mains → c'est un signal amical pour te parler. Sois cordial et demande ce qu'elle souhaite.
 - Si une personne INCONNUE lève les mains → c'est potentiellement une menace, demande-lui de s'identifier.
-- Observe bien les OBJETS que la personne tient et mentionne-les si pertinent.
+- Observe bien les OBJETS que la personne tient (selon l'Analyse Visuelle) et mentionne-les si pertinent.
 - Commente l'activité de la personne (assise, debout, en mouvement, etc.).
 - Ne répète JAMAIS la même phrase deux fois de suite.
 - NE mentionne PAS que tu es une IA. Tu es "l'agent de sécurité".
@@ -167,11 +169,11 @@ class AISecurityGuard:
     def _init_stt(self):
         """Initialise Whisper STT."""
         try:
-            import whisper
-            self._whisper_model = whisper.load_model(self.stt_model_name)
-            print(f"[AI-GUARD] Whisper STT initialisé ✓ (modèle: {self.stt_model_name})")
+            from faster_whisper import WhisperModel
+            self._whisper_model = WhisperModel(self.stt_model_name, device="auto", compute_type="int8")
+            print(f"[AI-GUARD] Faster-Whisper STT initialisé ✓ (modèle: {self.stt_model_name})")
         except Exception as e:
-            print(f"[AI-GUARD] ⚠ Whisper STT non disponible ({e})")
+            print(f"[AI-GUARD] ⚠ Faster-Whisper STT non disponible ({e})")
             self._whisper_model = None
 
     def _init_vision(self):
@@ -452,39 +454,49 @@ class AISecurityGuard:
         messages.append({"role": "user", "content": user_content})
 
         try:
+            import json, re
             r = requests.post(
                 f"{self.ollama_url}/api/chat",
                 json={
                     "model": self.ollama_model,
                     "messages": messages,
-                    "stream": False,
+                    "stream": True,
                     "options": {
                         "temperature": 0.7,
                         "num_predict": 200,
                     }
                 },
+                stream=True,
                 timeout=15
             )
             if r.status_code == 200:
-                response = r.json().get("message", {}).get("content", "").strip()
+                full_response = ""
+                buffer = ""
+                self._tts_busy = True
+                try:
+                    for line in r.iter_lines():
+                        if line:
+                            data = json.loads(line)
+                            chunk = data.get("message", {}).get("content", "")
+                            buffer += chunk
+                            full_response += chunk
+                            
+                            # Si on rencontre une ponctuation finale ou la fin de génération
+                            if any(p in chunk for p in ['.', '!', '?']) or data.get("done"):
+                                clean_buf = re.sub(r'<think>.*?</think>', '', buffer, flags=re.DOTALL).strip()
+                                if clean_buf and clean_buf != "[SILENCE]":
+                                    print(f"  🤖 [AI-GUARD] {clean_buf}")
+                                    self._speak(clean_buf)
+                                buffer = ""
+                finally:
+                    self._tts_busy = False
 
-                # Clean up any thinking tags from qwen3
-                if "<think>" in response:
-                    # Remove <think>...</think> blocks
-                    import re
-                    response = re.sub(r'<think>.*?</think>', '', response,
-                                      flags=re.DOTALL).strip()
-
+                response = re.sub(r'<think>.*?</think>', '', full_response, flags=re.DOTALL).strip()
                 if response and response != "[SILENCE]":
-                    # Save to history
-                    self._conversation_history.append(
-                        {"role": "user", "content": user_content})
-                    self._conversation_history.append(
-                        {"role": "assistant", "content": response})
-                    # Keep history manageable
+                    self._conversation_history.append({"role": "user", "content": user_content})
+                    self._conversation_history.append({"role": "assistant", "content": response})
                     if len(self._conversation_history) > 16:
-                        self._conversation_history = \
-                            self._conversation_history[-12:]
+                        self._conversation_history = self._conversation_history[-12:]
                     return response
             return None
         except Exception as e:
@@ -537,11 +549,11 @@ class AISecurityGuard:
                 wf.close()
                 temp_path = f.name
 
-            # Transcribe with Whisper
-            result = self._whisper_model.transcribe(
-                temp_path, language="fr", fp16=False
+            # Transcribe with Faster-Whisper
+            segments, _ = self._whisper_model.transcribe(
+                temp_path, language="fr"
             )
-            text = result.get("text", "").strip()
+            text = " ".join([segment.text for segment in segments]).strip()
 
             # Cleanup
             import os
@@ -648,12 +660,6 @@ class AISecurityGuard:
                         self._last_response = response
                         with self._lock:
                             self._current_response = response
-                        print(f"  🤖 [AI-GUARD] {response}")
-
-                        self._tts_busy = True
-                        self._speak(response)
-                        self._tts_busy = False
-
                         self._interaction_active = True
                     else:
                         self._interaction_active = False
@@ -673,11 +679,6 @@ class AISecurityGuard:
                 self._last_response = response
                 with self._lock:
                     self._current_response = response
-                print(f"  🤖 [AI-GUARD] {response}")
-
-                self._tts_busy = True
-                self._speak(response)
-                self._tts_busy = False
 
                 time.sleep(1.0)
 
@@ -690,13 +691,7 @@ class AISecurityGuard:
                         self._last_response = followup
                         with self._lock:
                             self._current_response = followup
-                        print(f"  🤖 [AI-GUARD] {followup}")
-
-                        self._tts_busy = True
-                        self._speak(followup)
-                        self._tts_busy = False
-
-                    self._interaction_active = True
+                        self._interaction_active = True
                 else:
                     self._interaction_active = False
             else:

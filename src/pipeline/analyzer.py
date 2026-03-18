@@ -84,8 +84,8 @@ class PersonTracker:
         
         p["current_action"] = action
 
-        # --- Détection d'objets par la pose ---
-        p["pose_objects"] = self._detect_objects_by_pose(keypoints)
+        # --- Détection d'objets par la pose (Désactivé : Remplacé par IA Vision) ---
+        p["pose_objects"] = []
 
         # --- Objets détectés par YOLO ---
         if detected_objects:
@@ -99,119 +99,10 @@ class PersonTracker:
 
     def _detect_objects_by_pose(self, kpts: np.ndarray) -> List[str]:
         """
-        Détecte des objets et postures basés sur les keypoints (17, 3).
-        
-        kpts format : (17, 3) avec [x, y, confidence]
-        
-        Détections :
-        - 📱 telephone : main près du visage OU main devant le torse (position texting)
-        - ✋ main levee : poignet au-dessus de l'épaule
-        - 🤝 bras croises : deux poignets proches au centre du torse
+        La détection géométrique d'objets (heuristiques) a été retirée au profit 
+        de l'analyse visuelle globale (Moondream) dans ai_guard.py et YOLO26n.
         """
-        objects = []
-
-        NOSE, L_EYE, R_EYE, L_EAR, R_EAR = 0, 1, 2, 3, 4
-        L_SHOULDER, R_SHOULDER = 5, 6
-        L_ELBOW, R_ELBOW = 7, 8
-        L_WRIST, R_WRIST = 9, 10
-        L_HIP, R_HIP = 11, 12
-
-        def conf(idx):
-            return kpts[idx][2] if idx < len(kpts) else 0
-
-        def pt(idx):
-            return kpts[idx][:2]
-
-        def dist(a, b):
-            if conf(a) < 0.3 or conf(b) < 0.3:
-                return float('inf')
-            return np.linalg.norm(pt(a) - pt(b))
-
-        # Référence de taille : distance entre les épaules
-        sd = dist(L_SHOULDER, R_SHOULDER)
-        if sd == float('inf') or sd < 10:
-            return objects
-
-        # ═══════════════════════════════════════════════
-        # 📱 TELEPHONE — Deux modes de détection
-        # ═══════════════════════════════════════════════
-
-        phone_detected = False
-
-        # Mode 1 : Appel téléphonique (main près de l'oreille)
-        for wrist, ear in [(L_WRIST, L_EAR), (R_WRIST, R_EAR)]:
-            d = dist(wrist, ear)
-            if d < sd * 1.0:
-                phone_detected = True
-                break
-
-        # Mode 2 : Texting/browsing (main devant le visage/poitrine)
-        # Le poignet est entre les épaules et les hanches, et le coude est plié
-        if not phone_detected:
-            for wrist, elbow, shoulder in [(L_WRIST, L_ELBOW, L_SHOULDER),
-                                           (R_WRIST, R_ELBOW, R_SHOULDER)]:
-                if conf(wrist) < 0.3 or conf(elbow) < 0.3 or conf(shoulder) < 0.3:
-                    continue
-
-                # Vérifier que le poignet est devant le torse (entre épaules et hanches en Y)
-                shoulder_y = kpts[shoulder][1]
-                hip_y = kpts[L_HIP][1] if conf(L_HIP) > 0.3 else shoulder_y + sd * 2
-                wrist_y = kpts[wrist][1]
-
-                # Le poignet doit être entre les épaules et les hanches
-                if shoulder_y - sd * 0.3 < wrist_y < hip_y + sd * 0.3:
-                    # Vérifier que le coude est plié (angle fermé)
-                    upper_arm = dist(shoulder, elbow)
-                    forearm = dist(elbow, wrist)
-                    full_arm = dist(shoulder, wrist)
-
-                    if upper_arm != float('inf') and forearm != float('inf') and full_arm != float('inf'):
-                        # Bras plié si la distance directe < somme des segments
-                        if upper_arm + forearm > 0:
-                            bend_ratio = full_arm / (upper_arm + forearm)
-                            # Coude plié = ratio < 0.85 (bras complètement tendu ≈ 1.0)
-                            if bend_ratio < 0.85:
-                                # Vérifier que le poignet est centré (pas sur le côté)
-                                torso_center_x = (kpts[L_SHOULDER][0] + kpts[R_SHOULDER][0]) / 2
-                                wrist_x = kpts[wrist][0]
-                                # Poignet pas trop loin du centre du torse
-                                if abs(wrist_x - torso_center_x) < sd * 1.5:
-                                    phone_detected = True
-                                    break
-
-        # Mode 3 : Main proche du nez (regarder le téléphone de près)
-        if not phone_detected:
-            for wrist in [L_WRIST, R_WRIST]:
-                d = dist(wrist, NOSE)
-                if d < sd * 1.2:
-                    phone_detected = True
-                    break
-
-        if phone_detected:
-            objects.append("📱 telephone")
-
-        # ═══════════════════════════════════════════════
-        # ✋ MAIN LEVÉE
-        # ═══════════════════════════════════════════════
-        for wrist, shoulder in [(L_WRIST, L_SHOULDER), (R_WRIST, R_SHOULDER)]:
-            if conf(wrist) > 0.3 and conf(shoulder) > 0.3:
-                if kpts[wrist][1] < kpts[shoulder][1] - sd * 0.4:
-                    if "✋ main levee" not in objects:
-                        objects.append("✋ main levee")
-
-        # ═══════════════════════════════════════════════
-        # 🤝 BRAS CROISÉS
-        # ═══════════════════════════════════════════════
-        if conf(L_WRIST) > 0.3 and conf(R_WRIST) > 0.3:
-            wrist_d = dist(L_WRIST, R_WRIST)
-            if wrist_d < sd * 0.6:
-                torso_y = (kpts[L_SHOULDER][1] + kpts[R_SHOULDER][1]) / 2
-                hip_y = (kpts[L_HIP][1] + kpts[R_HIP][1]) / 2 if conf(L_HIP) > 0.3 and conf(R_HIP) > 0.3 else torso_y + sd * 1.5
-                avg_wrist_y = (kpts[L_WRIST][1] + kpts[R_WRIST][1]) / 2
-                if torso_y - sd * 0.2 < avg_wrist_y < hip_y + sd * 0.2:
-                    objects.append("🤝 bras croises")
-
-        return objects
+        return []
 
     def get_stats(self, track_id: int) -> dict:
         """Retourne les stats complètes d'une personne."""
@@ -329,7 +220,7 @@ class Analyzer:
 
         for det in detections:
             # --- Mise à jour ST-GCN buffer ---
-            self.classifier.update(det.track_id, det.keypoints_xy)
+            self.classifier.update(det.track_id, det.keypoints)
 
             # --- Mise à jour BDD ---
             name = self.face_matcher.get_name(det.track_id)

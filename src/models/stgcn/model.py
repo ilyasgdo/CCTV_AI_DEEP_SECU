@@ -182,7 +182,7 @@ class STGCN(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: (N, C, T, V) = (batch, 2, 30, 17)
+            x: (N, C, T, V) = (batch, channels, 30, 17)
 
         Returns:
             (N, num_classes) — logits pour chaque action

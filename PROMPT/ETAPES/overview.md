@@ -55,6 +55,7 @@ Ce projet implémente un système de **vidéosurveillance intelligente** capable
 | **Phase 3** | [etape_3.md](etape_3.md) | Historique & Temps (SQLite) | Phase 1 |
 | **Phase 4** | [etape_4.md](etape_4.md) | Analyse Comportementale (ST-GCN) | Phase 1 |
 | **Phase 5** | [etape_5.md](etape_5.md) | Optimisation RTX 3080 Ti (Pipeline Async) | Phases 0-4 |
+| **Phase 6** | [etape_6.md](etape_6.md) | Améliorations IA (Précision & Latence) | Phases 0-5 |
 
 ## Structure du Projet (Cible Finale)
 
