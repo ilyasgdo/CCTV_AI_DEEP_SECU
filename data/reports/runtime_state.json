@@ -1,5 +1,5 @@
 {
-  "timestamp": 1775650594,
+  "timestamp": 1775650860,
   "frame_id": 4,
   "tracked_entities": 2,
   "detections": 1,
@@ -8,9 +8,9 @@
     "audio": false
   },
   "monitoring": {
-    "cpu_percent": 9.4,
-    "ram_percent": 54.5,
-    "ram_used_mb": 1504.09765625,
+    "cpu_percent": 10.3,
+    "ram_percent": 55.5,
+    "ram_used_mb": 1501.59375,
     "ram_alert": false,
     "fps_current": 25.0,
     "persons_detected": 2,

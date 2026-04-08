@@ -2,7 +2,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: BSD-3](https://img.shields.io/badge/License-BSD%203--Clause-green.svg)](LICENSE)
-[![Status: En développement](https://img.shields.io/badge/Status-En%20développement-yellow.svg)]()
+[![Status: Release Ready](https://img.shields.io/badge/Status-Release%20Ready-brightgreen.svg)]()
 
 > **Gardien de Sécurité Autonome Multimodal basé sur l'Intelligence Artificielle**
 
@@ -118,6 +118,26 @@ CCTV_AI_DEEP_SECU/
 - [Document de Vision (MVP)](DOCS/MVP)
 - [Plan de développement](DOCS/PLAN/INDEX.md)
 - [Règles de développement](DOCS/PLAN/00_REGLES_DEVELOPPEMENT.md)
+- [Guide utilisateur](DOCS/USER_GUIDE.md)
+- [Guide de déploiement](DOCS/DEPLOYMENT.md)
+
+---
+
+## 🐳 Docker (Étape 10)
+
+```bash
+# Build image
+docker build -t sentinel-ai:latest .
+
+# Run stack (Sentinel + Ollama)
+docker compose up -d
+```
+
+Fichiers associés:
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
 
 ---
 
