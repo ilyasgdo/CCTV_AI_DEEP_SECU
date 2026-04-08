@@ -1,0 +1,77 @@
+# ═══════════════════════════════════════════════════════════
+# Sentinel-AI — Configuration Principale
+# ═══════════════════════════════════════════════════════════
+# Ce fichier contient toutes les valeurs par défaut du système.
+# Les valeurs peuvent être surchargées par des variables
+# d'environnement (préfixe SENTINEL_).
+# ═══════════════════════════════════════════════════════════
+
+# ── Source Vidéo ──────────────────────────────────────────
+camera:
+  source: "0"                    # 0=webcam, URL RTSP, URL HTTP, fichier vidéo
+  width: 1280                    # Largeur de capture
+  height: 720                    # Hauteur de capture
+  fps: 30                        # FPS cible
+  buffer_size: 30                # Taille du buffer circulaire (frames)
+  reconnect_delay: 2.0           # Délai avant reconnexion (secondes)
+  max_reconnect_attempts: 10     # Nombre max de tentatives de reconnexion
+
+# ── Modèle de Langage (Ollama / API) ─────────────────────
+llm:
+  api_url: "http://localhost:11434"   # URL de l'API Ollama
+  model_name: "gemma4"                # Nom du modèle
+  timeout: 30                         # Timeout par requête (secondes)
+  analysis_interval: 5                # Intervalle d'analyse (secondes)
+  max_retries: 3                      # Nombre de retry en cas d'erreur
+  temperature: 0.3                    # Température de génération
+  max_tokens: 1024                    # Tokens max par réponse
+
+# ── Détection d'Objets (YOLO) ────────────────────────────
+detection:
+  model_path: "yolo26n.pt"      # Chemin vers le modèle YOLO
+  confidence: 0.5                # Seuil de confiance minimum [0.0-1.0]
+  iou_threshold: 0.45            # Seuil IoU pour NMS
+  input_size: 640                # Taille d'entrée du modèle (pixels)
+  device: "auto"                 # "auto", "cpu", "cuda:0"
+  skip_frames: 1                 # Détecter 1 frame sur N (1=toutes)
+
+# ── Reconnaissance Faciale ───────────────────────────────
+face:
+  similarity_threshold: 0.6      # Seuil de reconnaissance [0.0-1.0]
+  uncertain_threshold: 0.4       # En dessous = inconnu, entre = incertain
+  recalculate_interval: 30       # Recalculer l'embedding toutes les N frames
+  margin_percent: 0.2            # Marge autour du visage pour le crop
+  whitelist_dir: "data/whitelist" # Répertoire de la whitelist
+
+# ── Audio (TTS + STT) ────────────────────────────────────
+audio:
+  tts_enabled: true              # Activer la synthèse vocale
+  stt_enabled: true              # Activer la transcription vocale
+  tts_voice: "fr-FR-HenriNeural" # Voix TTS (edge-tts)
+  stt_model: "base"              # Taille du modèle Whisper (tiny/base/small/medium)
+  stt_language: "fr"             # Langue de transcription
+  vad_enabled: true              # Détection d'activité vocale
+  buffer_seconds: 10             # Buffer audio en secondes
+
+# ── Dashboard Web ────────────────────────────────────────
+dashboard:
+  host: "0.0.0.0"               # Adresse d'écoute
+  port: 5000                     # Port HTTP
+  debug: false                   # Mode debug Flask
+  secret_key: "sentinel-ai-secret-change-me"  # Clé secrète Flask
+
+# ── Alertes ──────────────────────────────────────────────
+alerts:
+  email_enabled: false           # Activer les alertes email
+  email_to: ""                   # Adresse email destinataire
+  lingering_threshold: 120       # Temps (sec) avant alerte "rôdeur"
+  clip_pre_seconds: 10           # Secondes de vidéo AVANT l'alerte
+  clip_post_seconds: 15          # Secondes de vidéo APRÈS l'alerte
+
+# ── Logging ──────────────────────────────────────────────
+logging:
+  level: "INFO"                  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file_enabled: true             # Écrire dans un fichier log
+  log_dir: "logs"                # Répertoire des logs
+  max_file_size_mb: 10           # Taille max d'un fichier log (MB)
+  backup_count: 5                # Nombre de fichiers log de backup
