@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -79,10 +80,37 @@ class InsightFaceEmbedder:
                 "insightface n'est pas installe. Executez: pip install insightface"
             ) from exc
 
-        self._app = FaceAnalysis(name="buffalo_l", providers=self._providers)
+        try:
+            self._app = FaceAnalysis(name="buffalo_l", providers=self._providers)
+        except TypeError:
+            # Compatibilite avec certaines versions d'insightface
+            # qui ne supportent pas l'argument `providers`.
+            # Certaines versions anciennes echouent sur le pack complet
+            # buffalo_l (routing de modeles non supportes). On utilise un
+            # pack minimal detection+recognition.
+            root = Path.home() / ".insightface" / "models"
+            src_dir = root / "buffalo_l"
+            dst_name = "buffalo_l_min"
+            dst_dir = root / dst_name
+            det_src = src_dir / "det_10g.onnx"
+            rec_src = src_dir / "w600k_r50.onnx"
+
+            try:
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                if det_src.exists() and not (dst_dir / det_src.name).exists():
+                    shutil.copy2(det_src, dst_dir / det_src.name)
+                if rec_src.exists() and not (dst_dir / rec_src.name).exists():
+                    shutil.copy2(rec_src, dst_dir / rec_src.name)
+                self._app = FaceAnalysis(name=dst_name)
+            except Exception:
+                self._app = FaceAnalysis(name="buffalo_l")
+
+        ctx_id = 0 if "CUDAExecutionProvider" in self._providers else -1
         # det_size modeste pour un bon compromis qualite/perf.
-        self._app.prepare(ctx_id=0 if "CUDAExecutionProvider" in self._providers else -1,
-                          det_size=(640, 640))
+        try:
+            self._app.prepare(ctx_id=ctx_id, det_size=(640, 640))
+        except TypeError:
+            self._app.prepare(ctx_id=ctx_id)
 
     def extract_embeddings(self, image_bgr: np.ndarray) -> list[np.ndarray]:
         """Extrait les embeddings des visages detectes dans une image BGR.
@@ -351,6 +379,7 @@ class FaceManager:
         self._known_embeddings: list[tuple[str, str, np.ndarray]] = []
         self._person_roles: dict[str, str] = {}
         self._track_cache: dict[int, dict[str, Any]] = {}
+        self._quality_face_detector: Any = None
 
         self.reload_whitelist()
 
@@ -376,6 +405,55 @@ class FaceManager:
             sanitized = sanitized.replace("__", "_")
         return sanitized.strip("_") or "person"
 
+    def _get_quality_face_detector(self) -> Optional[Any]:
+        """Initialise paresseusement le detecteur de visage OpenCV pour QA."""
+        if self._quality_face_detector is not None:
+            return self._quality_face_detector
+
+        cascade_path = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
+        if not cascade_path.exists():
+            return None
+
+        detector = cv2.CascadeClassifier(str(cascade_path))
+        if detector.empty():
+            return None
+
+        self._quality_face_detector = detector
+        return detector
+
+    def _select_quality_roi(self, image_bgr: np.ndarray) -> np.ndarray:
+        """Retourne la zone la plus pertinente pour evaluer la qualite.
+
+        Sur de grandes images (ex: frame camera 1280x720), la qualite doit etre
+        evaluee sur le visage et non sur toute la scene.
+        """
+        h, w = image_bgr.shape[:2]
+        if h < 220 and w < 220:
+            return image_bgr
+
+        detector = self._get_quality_face_detector()
+        if detector is None:
+            return image_bgr
+
+        gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+        faces = detector.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(48, 48),
+        )
+        if len(faces) == 0:
+            return image_bgr
+
+        x, y, fw, fh = max(faces, key=lambda f: int(f[2] * f[3]))
+        x2 = min(w, x + fw)
+        y2 = min(h, y + fh)
+        roi = image_bgr[y:y2, x:x2]
+        if roi.size == 0:
+            return image_bgr
+
+        return roi
+
     def validate_face_quality(self, face_bgr: np.ndarray) -> bool:
         """Valide la qualite minimale d'un crop visage.
 
@@ -393,17 +471,19 @@ class FaceManager:
         if face_bgr is None or face_bgr.size == 0:
             return False
 
-        h, w = face_bgr.shape[:2]
+        quality_roi = self._select_quality_roi(face_bgr)
+
+        h, w = quality_roi.shape[:2]
         if h < 40 or w < 40:
             return False
 
-        gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(quality_roi, cv2.COLOR_BGR2GRAY)
         brightness = float(gray.mean())
-        if brightness < 35.0 or brightness > 225.0:
+        if brightness < 25.0 or brightness > 235.0:
             return False
 
         sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-        if sharpness < 50.0:
+        if sharpness < 20.0:
             return False
 
         return True
@@ -678,19 +758,23 @@ class FaceManager:
 
         embedding_files: list[str] = []
         photo_files: list[str] = []
+        rejected_reasons: list[str] = []
 
         for idx, photo_path_str in enumerate(photo_paths, start=1):
             photo_path = Path(photo_path_str)
             image = cv2.imread(str(photo_path))
             if image is None:
-                raise EnrollmentError(f"Image illisible: {photo_path}")
-
-            if not self.validate_face_quality(image):
-                raise EnrollmentError(f"Qualite insuffisante: {photo_path}")
+                rejected_reasons.append(f"{photo_path} (image illisible)")
+                continue
 
             embedding = self._extract_single_embedding(image)
             if embedding is None:
-                raise EnrollmentError(f"Aucun visage detecte: {photo_path}")
+                rejected_reasons.append(f"{photo_path} (aucun visage detecte)")
+                continue
+
+            if not self.validate_face_quality(image):
+                rejected_reasons.append(f"{photo_path} (qualite insuffisante)")
+                continue
 
             emb_name = f"{slug}_{idx:03d}.npy"
             photo_name = f"{slug}_ref_{idx}.jpg"
@@ -699,6 +783,14 @@ class FaceManager:
             self._repository.save_photo(photo_name, image)
             embedding_files.append(emb_name)
             photo_files.append(photo_name)
+
+        if len(embedding_files) < 3:
+            rejected = "; ".join(rejected_reasons) if rejected_reasons else "raison inconnue"
+            raise EnrollmentError(
+                "Enrollement photo impossible: "
+                f"{len(embedding_files)}/{len(photo_paths)} captures valides "
+                f"(minimum requis: 3). Rejets: {rejected}"
+            )
 
         person = {
             "id": person_id,
@@ -768,11 +860,11 @@ class FaceManager:
             if now - last_capture_ts < interval_seconds:
                 continue
 
-            if not self.validate_face_quality(frame):
-                continue
-
             embedding = self._extract_single_embedding(frame)
             if embedding is None:
+                continue
+
+            if not self.validate_face_quality(frame):
                 continue
 
             captured += 1

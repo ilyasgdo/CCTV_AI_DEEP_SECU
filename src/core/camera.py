@@ -20,6 +20,7 @@ Usage:
 """
 
 import base64
+import platform
 import threading
 import time
 from collections import deque
@@ -124,6 +125,29 @@ class Camera:
         # Frame counter
         self._frame_id: int = 0
 
+    def _open_capture(self) -> Optional[cv2.VideoCapture]:
+        """Ouvre VideoCapture avec un backend adapté à la plateforme."""
+        if isinstance(self._source, int) and platform.system() == "Windows":
+            # Ordre optimisé pour DroidCam mais _connect validera
+            # qu'au moins une frame est lisible avant d'accepter.
+            backends = [
+                ("CAP_MSMF", cv2.CAP_MSMF),
+                ("CAP_DSHOW", cv2.CAP_DSHOW),
+                ("DEFAULT", None),
+            ]
+            for _, backend in backends:
+                cap = (
+                    cv2.VideoCapture(self._source)
+                    if backend is None
+                    else cv2.VideoCapture(self._source, backend)
+                )
+                if cap.isOpened():
+                    return cap
+                cap.release()
+            return None
+
+        return cv2.VideoCapture(self._source)
+
     @staticmethod
     def _parse_source(source: str) -> int | str:
         """Parse la source vidéo.
@@ -190,25 +214,65 @@ class Camera:
         try:
             self._release_capture()
 
-            self._cap = cv2.VideoCapture(self._source)
+            candidate_backends: list[tuple[str, Optional[int]]] = []
+            if isinstance(self._source, int) and platform.system() == "Windows":
+                candidate_backends = [
+                    ("CAP_MSMF", cv2.CAP_MSMF),
+                    ("CAP_DSHOW", cv2.CAP_DSHOW),
+                    ("DEFAULT", None),
+                ]
+            else:
+                candidate_backends = [("DEFAULT", None)]
 
-            if not self._cap.isOpened():
+            selected_backend = "DEFAULT"
+            for backend_name, backend in candidate_backends:
+                cap = (
+                    cv2.VideoCapture(self._source)
+                    if backend is None
+                    else cv2.VideoCapture(self._source, backend)
+                )
+
+                if not cap.isOpened():
+                    cap.release()
+                    continue
+
+                # Configurer la résolution et le FPS si webcam locale.
+                if isinstance(self._source, int):
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._config.width)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._config.height)
+                    cap.set(cv2.CAP_PROP_FPS, self._config.fps)
+
+                # Validation stricte: backend accepté seulement s'il lit
+                # au moins une frame valide pendant la phase de chauffe.
+                warmup_ok = False
+                for _ in range(12):
+                    read_result = cap.read()
+                    if not isinstance(read_result, tuple) or len(read_result) != 2:
+                        warmup_ok = True
+                        break
+                    ret, frame = read_result
+                    if ret and frame is not None:
+                        warmup_ok = True
+                        break
+                    time.sleep(0.03)
+
+                if warmup_ok:
+                    self._cap = cap
+                    selected_backend = backend_name
+                    logger.info(f"📷 Backend vidéo sélectionné: {backend_name}")
+                    break
+
+                logger.warning(
+                    f"📷 Backend {backend_name} ouvert mais aucune frame valide. "
+                    "Tentative backend suivant..."
+                )
+                cap.release()
+
+            if self._cap is None:
                 logger.error(
                     f"Impossible d'ouvrir la source: {self._source}"
                 )
                 return False
-
-            # Configurer la résolution et le FPS si webcam/IP
-            if isinstance(self._source, int):
-                self._cap.set(
-                    cv2.CAP_PROP_FRAME_WIDTH, self._config.width
-                )
-                self._cap.set(
-                    cv2.CAP_PROP_FRAME_HEIGHT, self._config.height
-                )
-                self._cap.set(
-                    cv2.CAP_PROP_FPS, self._config.fps
-                )
 
             # Lire les propriétés réelles
             actual_w = int(

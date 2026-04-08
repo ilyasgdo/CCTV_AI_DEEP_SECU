@@ -1,3 +1,42 @@
 {
-  "persons": []
+  "persons": [
+    {
+      "id": "person_1775654892714",
+      "name": "Ilyas",
+      "role": "Owner",
+      "access_level": "admin",
+      "embeddings": [
+        "ilyas_001.npy"
+      ],
+      "photos": [
+        "ilyas_ref_1.jpg"
+      ],
+      "enrolled_at": "2026-04-08T13:28:14Z",
+      "last_seen": "2026-04-08T13:41:27Z",
+      "notes": ""
+    },
+    {
+      "id": "person_1775682133545",
+      "name": "Ilyas",
+      "role": "Owner",
+      "access_level": "admin",
+      "embeddings": [
+        "ilyas_001.npy",
+        "ilyas_002.npy",
+        "ilyas_003.npy",
+        "ilyas_004.npy",
+        "ilyas_005.npy"
+      ],
+      "photos": [
+        "ilyas_ref_1.jpg",
+        "ilyas_ref_2.jpg",
+        "ilyas_ref_3.jpg",
+        "ilyas_ref_4.jpg",
+        "ilyas_ref_5.jpg"
+      ],
+      "enrolled_at": "2026-04-08T21:02:16Z",
+      "last_seen": null,
+      "notes": ""
+    }
+  ]
 }
