@@ -1,1 +1,1 @@
-# Sentinel-AI — Utils package (Transverse utilities)
+"""Package utilitaires transverses Sentinel-AI."""

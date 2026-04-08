@@ -1,0 +1,23 @@
+{
+  "timestamp": 1775649217,
+  "frame_id": 4,
+  "tracked_entities": 2,
+  "detections": 1,
+  "degraded": {
+    "llm": false,
+    "audio": false
+  },
+  "monitoring": {
+    "cpu_percent": 8.1,
+    "ram_percent": 54.1,
+    "ram_used_mb": 1379.609375,
+    "ram_alert": false,
+    "fps_current": 25.0,
+    "persons_detected": 2,
+    "llm_latency_ms": 0.0,
+    "llm_avg_latency_ms": 0.0,
+    "llm_error_rate": 0.0,
+    "events_total": 1,
+    "uptime_seconds": 0
+  }
+}

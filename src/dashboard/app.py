@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover
 from src.cognitive.llm_client import LLMClient
 from src.core.config import Config
 from src.core.face_manager import WhitelistRepository
+from src.utils.system_monitor import SystemMonitor
 from src.utils.event_bus import EventBus
 from src.utils.logger import get_logger
 
@@ -47,6 +48,7 @@ class DashboardState:
     visualizer: Optional[object]
     llm_client: Optional[LLMClient]
     whitelist_repo: WhitelistRepository
+    monitor: Optional[SystemMonitor]
 
 
 def _resolve_path(config: Config, value: str) -> Path:
@@ -117,6 +119,7 @@ def create_app(
     tracker: Optional[object] = None,
     visualizer: Optional[object] = None,
     llm_client: Optional[LLMClient] = None,
+    monitor: Optional[SystemMonitor] = None,
 ) -> Flask:
     """Construit et configure l'application Flask du dashboard.
 
@@ -153,6 +156,7 @@ def create_app(
         visualizer=visualizer,
         llm_client=llm_client,
         whitelist_repo=WhitelistRepository(whitelist_dir),
+        monitor=monitor,
     )
     app.config["dashboard_state"] = state
 
@@ -168,6 +172,13 @@ def create_app(
     }
     auth_user = os.getenv("DASHBOARD_USERNAME", "admin")
     auth_pass = os.getenv("DASHBOARD_PASSWORD", "sentinel")
+    rate_limit_enabled = os.getenv("DASHBOARD_RATE_LIMIT_ENABLED", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    rate_limit_max = max(5, int(os.getenv("DASHBOARD_RATE_LIMIT_PER_MIN", "120")))
+    request_history: dict[str, list[float]] = {}
 
     def _auth_ok() -> bool:
         if not auth_enabled:
@@ -189,6 +200,48 @@ def create_app(
             401,
             {"WWW-Authenticate": 'Basic realm="Sentinel Dashboard"'},
         )
+
+    def _validate_whitelist_payload(payload: Any) -> tuple[bool, str]:
+        """Valide le payload whitelist avant ecriture."""
+        if not isinstance(payload, dict):
+            return False, "Invalid payload"
+
+        name = payload.get("name", "Unknown")
+        role = payload.get("role", "Visitor")
+        access_level = payload.get("access_level", "user")
+        notes = payload.get("notes", "")
+
+        if not isinstance(name, str) or not name.strip() or len(name) > 80:
+            return False, "Invalid field: name"
+        if not isinstance(role, str) or len(role) > 80:
+            return False, "Invalid field: role"
+        if access_level not in {"guest", "user", "admin", "staff", "security"}:
+            return False, "Invalid field: access_level"
+        if not isinstance(notes, str) or len(notes) > 400:
+            return False, "Invalid field: notes"
+
+        return True, ""
+
+    @app.before_request
+    def _access_log_and_rate_limit() -> Optional[Response]:
+        """Journalise les acces dashboard et applique un rate limit API."""
+        logger.info("dashboard_access method=%s path=%s remote=%s",
+                    request.method, request.path, request.remote_addr)
+
+        if not rate_limit_enabled:
+            return None
+        if not request.path.startswith("/api/"):
+            return None
+
+        now = time.time()
+        key = f"{request.remote_addr or 'unknown'}:{request.path}"
+        timestamps = [ts for ts in request_history.get(key, []) if now - ts < 60.0]
+        if len(timestamps) >= rate_limit_max:
+            return jsonify({"error": "Rate limit exceeded"}), 429
+
+        timestamps.append(now)
+        request_history[key] = timestamps
+        return None
 
     def require_auth(func: Callable[..., Any]) -> Callable[..., Any]:
         """Decorateur d'authentification basique."""
@@ -328,6 +381,10 @@ def create_app(
     def api_whitelist_create() -> Response:
         """Ajoute une personne dans la whitelist."""
         payload = request.get_json(silent=True) or {}
+        is_valid, error_msg = _validate_whitelist_payload(payload)
+        if not is_valid:
+            return jsonify({"error": error_msg}), 400
+
         now_iso = (
             datetime.now(timezone.utc)
             .replace(microsecond=0)
@@ -359,7 +416,24 @@ def create_app(
     def api_whitelist_update(person_id: str) -> Response:
         """Met a jour une personne de la whitelist."""
         payload = request.get_json(silent=True) or {}
-        ok = state.whitelist_repo.update_person(person_id, payload)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Invalid payload"}), 400
+
+        allowed_fields = {"name", "role", "access_level", "notes", "last_seen"}
+        sanitized: dict[str, Any] = {}
+        for key, value in payload.items():
+            if key not in allowed_fields:
+                continue
+            if key in {"name", "role", "notes", "last_seen"} and not isinstance(value, str):
+                return jsonify({"error": f"Invalid field type: {key}"}), 400
+            sanitized[key] = value
+
+        if "access_level" in sanitized and sanitized["access_level"] not in {
+            "guest", "user", "admin", "staff", "security"
+        }:
+            return jsonify({"error": "Invalid field: access_level"}), 400
+
+        ok = state.whitelist_repo.update_person(person_id, sanitized)
         if not ok:
             return jsonify({"error": "Person not found"}), 404
         return jsonify({"updated": True})
@@ -397,6 +471,12 @@ def create_app(
         payload = request.get_json(silent=True) or {}
         if not isinstance(payload, dict):
             return jsonify({"error": "Invalid payload"}), 400
+
+        allowed_sections = {
+            "camera", "llm", "detection", "face", "audio", "dashboard", "alerts", "logging"
+        }
+        if any(section not in allowed_sections for section in payload):
+            return jsonify({"error": "Invalid section in payload"}), 400
 
         for section_name, section_values in payload.items():
             target = getattr(cfg, section_name, None)
@@ -447,6 +527,17 @@ def create_app(
     def api_status() -> Response:
         """Expose le statut runtime du systeme."""
         return jsonify(_collect_status())
+
+    @app.route("/api/monitoring")
+    @require_auth
+    def api_monitoring() -> Response:
+        """Expose les metriques detaillees du module de monitoring."""
+        if state.monitor is None:
+            fallback = _collect_status()
+            fallback["monitoring_mode"] = "fallback"
+            return jsonify(fallback)
+
+        return jsonify(state.monitor.get_metrics())
 
     def _collect_status() -> dict[str, Any]:
         """Construit le payload statut sans contexte request."""

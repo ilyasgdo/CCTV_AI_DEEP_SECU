@@ -11,7 +11,9 @@ Ce module implémente l'etape 3:
 
 from __future__ import annotations
 
+import io
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -32,6 +34,11 @@ try:
     from scipy.spatial.distance import cosine as scipy_cosine_distance
 except ImportError:
     scipy_cosine_distance = None
+
+try:
+    from cryptography.fernet import Fernet  # type: ignore[import-not-found]
+except ImportError:
+    Fernet = None  # type: ignore[assignment]
 
 
 class FaceManagerError(Exception):
@@ -119,6 +126,7 @@ class WhitelistRepository:
         self.registry_path = self.base_dir / "registry.json"
         self.embeddings_dir = self.base_dir / "embeddings"
         self.photos_dir = self.base_dir / "photos"
+        self._encryption_key = os.getenv("SENTINEL_WHITELIST_ENCRYPTION_KEY", "").strip()
 
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.embeddings_dir.mkdir(parents=True, exist_ok=True)
@@ -126,6 +134,33 @@ class WhitelistRepository:
 
         if not self.registry_path.exists():
             self._save_registry({"persons": []})
+
+    def _encrypt_bytes_if_enabled(self, payload: bytes) -> bytes:
+        """Chiffre le payload si une cle valide est configuree."""
+        if not self._encryption_key:
+            return payload
+        if Fernet is None:
+            logger.warning("Chiffrement whitelist desactive: cryptography indisponible")
+            return payload
+
+        try:
+            return Fernet(self._encryption_key.encode("utf-8")).encrypt(payload)
+        except Exception:
+            logger.error("Cle de chiffrement whitelist invalide, ecriture en clair")
+            return payload
+
+    def _decrypt_bytes_if_enabled(self, payload: bytes) -> bytes:
+        """Dechiffre le payload si une cle valide est configuree."""
+        if not self._encryption_key:
+            return payload
+        if Fernet is None:
+            return payload
+
+        try:
+            return Fernet(self._encryption_key.encode("utf-8")).decrypt(payload)
+        except Exception:
+            logger.warning("Dechiffrement whitelist impossible, tentative lecture brute")
+            return payload
 
     def _load_registry(self) -> dict[str, Any]:
         """Charge le registre JSON depuis disque."""
@@ -230,7 +265,10 @@ class WhitelistRepository:
     def save_embedding(self, filename: str, embedding: np.ndarray) -> str:
         """Sauvegarde un embedding numpy dans le repertoire dedie."""
         path = self.embeddings_dir / filename
-        np.save(path, embedding.astype(np.float32))
+        buffer = io.BytesIO()
+        np.save(buffer, embedding.astype(np.float32))
+        payload = self._encrypt_bytes_if_enabled(buffer.getvalue())
+        path.write_bytes(payload)
         return filename
 
     def save_photo(self, filename: str, image_bgr: np.ndarray) -> str:
@@ -255,7 +293,9 @@ class WhitelistRepository:
                 if not emb_path.exists():
                     continue
 
-                embedding = np.load(emb_path).astype(np.float32)
+                raw_payload = emb_path.read_bytes()
+                decrypted = self._decrypt_bytes_if_enabled(raw_payload)
+                embedding = np.load(io.BytesIO(decrypted), allow_pickle=False).astype(np.float32)
                 norm = float(np.linalg.norm(embedding))
                 if norm > 0.0:
                     embedding = embedding / norm
