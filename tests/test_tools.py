@@ -15,6 +15,7 @@ from src.effector.alarm_tool import AlarmTool
 from src.effector.email_tool import EmailTool
 from src.effector.event_log_tool import EventLogTool
 from src.effector.snapshot_tool import SnapshotTool
+from src.effector.telegram_tool import TelegramTool
 from src.effector.tool_executor import ToolExecutor
 from src.utils.event_bus import EventBus
 
@@ -133,3 +134,23 @@ def test_tool_executor_runs_and_handles_unknown() -> None:
     assert len(results) == 2
     assert results[0].success is True
     assert results[1].success is False
+
+
+def test_telegram_tool_success(monkeypatch) -> None:
+    """TelegramTool envoie une notification quand configure."""
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url: str, json: dict, timeout: int):
+        assert "sendMessage" in url
+        assert json["chat_id"] == "chat"
+        assert timeout == 8
+        return FakeResponse()
+
+    tool = TelegramTool(request_fn=fake_post)
+    result = asyncio.run(tool.run({"message": "Alerte"}))
+    assert result.success is True

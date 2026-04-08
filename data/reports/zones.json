@@ -1,0 +1,26 @@
+[
+  {
+    "id": "z1",
+    "name": "Entree",
+    "zone_type": "intrusion",
+    "points": [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        0
+      ],
+      [
+        100,
+        100
+      ],
+      [
+        0,
+        100
+      ]
+    ],
+    "enabled": true
+  }
+]

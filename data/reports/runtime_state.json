@@ -1,5 +1,5 @@
 {
-  "timestamp": 1775649217,
+  "timestamp": 1775650491,
   "frame_id": 4,
   "tracked_entities": 2,
   "detections": 1,
@@ -8,9 +8,9 @@
     "audio": false
   },
   "monitoring": {
-    "cpu_percent": 8.1,
-    "ram_percent": 54.1,
-    "ram_used_mb": 1379.609375,
+    "cpu_percent": 7.5,
+    "ram_percent": 55.2,
+    "ram_used_mb": 1502.86328125,
     "ram_alert": false,
     "fps_current": 25.0,
     "persons_detected": 2,
@@ -19,5 +19,6 @@
     "llm_error_rate": 0.0,
     "events_total": 1,
     "uptime_seconds": 0
-  }
+  },
+  "zones": 1
 }

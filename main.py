@@ -25,9 +25,11 @@ from src.cognitive import (
     ResponseParser,
 )
 from src.core.camera import Camera
+from src.core.alert_clip_recorder import AlertClipRecorder
 from src.core.config import Config
 from src.core.detector import Detection, ObjectDetector
 from src.core.face_manager import FaceManager
+from src.core.surveillance_zones import SurveillanceZoneManager
 from src.core.tracker import Tracker, TrackedEntity
 from src.dashboard.app import create_app
 from src.effector import ToolExecutor
@@ -106,6 +108,8 @@ class SentinelAI:
         self.detector: Optional[ObjectDetector] = None
         self.tracker = Tracker(self.config, self.event_bus)
         self.face_manager: Optional[FaceManager] = None
+        self.clip_recorder = AlertClipRecorder(self.config)
+        self.zone_manager = SurveillanceZoneManager(self.config)
 
         self.llm_client = LLMClient(self.config)
         self.prompt_manager = PromptManager(self.config)
@@ -182,6 +186,7 @@ class SentinelAI:
                 tracker=self.tracker,
                 llm_client=self.llm_client,
                 monitor=self.monitor,
+                zone_manager=self.zone_manager,
             )
             self.dashboard_server = DashboardServer(self.config, app)
 
@@ -201,6 +206,9 @@ class SentinelAI:
         """Connecte les handlers d'evenements inter-modules."""
         self.event_bus.subscribe("llm_response", self._on_llm_response)
         self.event_bus.subscribe("camera_disconnected", self._on_camera_disconnected)
+        self.event_bus.subscribe("face_unknown", self._on_alert_event)
+        self.event_bus.subscribe("entity_lingering", self._on_alert_event)
+        self.event_bus.subscribe("zone_intrusion", self._on_alert_event)
 
     def _on_camera_disconnected(self, data: dict[str, Any]) -> None:
         """Reaction au signal camera indisponible."""
@@ -211,7 +219,15 @@ class SentinelAI:
         loop = self._async_loop
         if loop is None or loop.is_closed():
             return
+
+        if str(data.get("niveau_alerte", "normal")) in {"alerte", "critique"}:
+            self.clip_recorder.on_alert("llm_alert")
+
         asyncio.run_coroutine_threadsafe(self._execute_actions(data), loop)
+
+    def _on_alert_event(self, _: dict[str, Any]) -> None:
+        """Declenche l'enregistrement de clip sur evenement alerte."""
+        self.clip_recorder.on_alert("intrusion")
 
     async def _execute_actions(self, payload: dict[str, Any]) -> None:
         """Execute la phase 6.7 (TTS + tools + event log)."""
@@ -253,6 +269,8 @@ class SentinelAI:
                 time.sleep(0.02)
                 continue
 
+            self.clip_recorder.add_frame(frame)
+
             self._frame_id += 1
             detections = self.detector.detect(frame, self._frame_id) if self.detector else []
             entities = self.tracker.update(detections)
@@ -267,6 +285,10 @@ class SentinelAI:
             with self._state_lock:
                 self._latest_detections = detections
                 self._latest_entities = entities
+
+            intrusions = self.zone_manager.check_intrusions(entities)
+            for hit in intrusions:
+                self.event_bus.emit("zone_intrusion", hit)
 
             time.sleep(sleep_time)
 
@@ -374,6 +396,7 @@ class SentinelAI:
                     "audio": self._degraded_audio,
                 },
                 "monitoring": self.monitor.get_metrics(),
+                "zones": len(self.zone_manager.list_zones()),
             }
 
         out.write_text(json.dumps(payload, indent=2), encoding="utf-8")

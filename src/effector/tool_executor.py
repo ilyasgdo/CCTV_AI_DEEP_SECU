@@ -11,6 +11,7 @@ from src.effector.base_tool import BaseTool, ToolResult
 from src.effector.email_tool import EmailTool
 from src.effector.event_log_tool import EventLogTool
 from src.effector.snapshot_tool import SnapshotTool
+from src.effector.telegram_tool import TelegramTool
 from src.utils.event_bus import EventBus
 from src.utils.logger import get_logger
 
@@ -83,6 +84,7 @@ class ToolExecutor:
         self.tools["trigger_alarm"] = AlarmTool()
         self.tools["save_snapshot"] = SnapshotTool(config, camera=camera)
         self.tools["log_event"] = EventLogTool(config)
+        self.tools["send_telegram"] = TelegramTool()
         self.tools["announce"] = AnnounceTool(tts_engine)
 
     async def execute(self, actions: list[ToolAction | dict[str, Any]]) -> list[ToolResult]:

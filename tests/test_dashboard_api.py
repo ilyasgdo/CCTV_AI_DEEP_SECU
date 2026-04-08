@@ -237,3 +237,61 @@ def test_rate_limit_blocks_excess_requests(tmp_path: Path, monkeypatch: pytest.M
             assert rate_client.get("/api/status").status_code == 200
         limited = rate_client.get("/api/status")
         assert limited.status_code == 429
+
+
+def test_zones_api_update_and_get(client) -> None:
+    """API zones: sauvegarde et lecture de polygones."""
+    payload = {
+        "zones": [
+            {
+                "id": "z1",
+                "name": "Entree",
+                "zone_type": "intrusion",
+                "points": [[0, 0], [100, 0], [100, 100], [0, 100]],
+            }
+        ]
+    }
+    put_resp = client.put("/api/zones", json=payload)
+    assert put_resp.status_code == 200
+
+    get_resp = client.get("/api/zones")
+    assert get_resp.status_code == 200
+    assert len(get_resp.get_json()["items"]) == 1
+
+
+def test_report_daily_endpoint(client) -> None:
+    """API rapport journalier retourne un chemin PDF."""
+    response = client.get("/api/report/daily?date=2026-04-08")
+    assert response.status_code == 200
+    assert response.get_json()["report_path"].endswith(".pdf")
+
+
+def test_external_api_v1_requires_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """API v1 securisee refuse sans cle et accepte avec cle valide."""
+    monkeypatch.setenv("DASHBOARD_AUTH_ENABLED", "false")
+    monkeypatch.setenv("DASHBOARD_DISABLE_BACKGROUND", "true")
+    monkeypatch.setenv("SENTINEL_EXTERNAL_API_KEY", "ext-key")
+
+    event_log = tmp_path / "event_log.json"
+    event_log.write_text("[]", encoding="utf-8")
+    settings_file = tmp_path / "settings.yaml"
+    settings_file.write_text("{}", encoding="utf-8")
+    snapshots_dir = tmp_path / "snapshots"
+    snapshots_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(dashboard_app, "EVENT_LOG_FILE", str(event_log))
+    monkeypatch.setattr(dashboard_app, "SETTINGS_FILE", str(settings_file))
+    monkeypatch.setattr(dashboard_app, "SNAPSHOTS_DIR", str(snapshots_dir))
+
+    cfg = Config()
+    cfg.face.whitelist_dir = str(tmp_path / "whitelist")
+    app = create_app(config=cfg, camera=FakeCamera(), tracker=FakeTracker(), llm_client=FakeLLMClient())
+    app.testing = True
+
+    with app.test_client() as external_client:
+        denied = external_client.get("/api/v1/cameras")
+        assert denied.status_code == 401
+
+        allowed = external_client.get("/api/v1/cameras", headers={"X-API-Key": "ext-key"})
+        assert allowed.status_code == 200
+        assert len(allowed.get_json()["items"]) == 1

@@ -5,6 +5,7 @@ from src.effector.base_tool import BaseTool, ToolResult
 from src.effector.email_tool import EmailTool
 from src.effector.event_log_tool import EventLogTool
 from src.effector.snapshot_tool import SnapshotTool
+from src.effector.telegram_tool import TelegramTool
 from src.effector.tool_executor import ToolExecutor
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
 	"EmailTool",
 	"EventLogTool",
 	"SnapshotTool",
+	"TelegramTool",
 	"ToolExecutor",
 	"ToolResult",
 ]

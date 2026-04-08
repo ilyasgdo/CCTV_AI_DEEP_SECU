@@ -26,6 +26,8 @@ except ImportError:  # pragma: no cover
 from src.cognitive.llm_client import LLMClient
 from src.core.config import Config
 from src.core.face_manager import WhitelistRepository
+from src.core.report_generator import ReportGenerator
+from src.core.surveillance_zones import SurveillanceZoneManager
 from src.utils.system_monitor import SystemMonitor
 from src.utils.event_bus import EventBus
 from src.utils.logger import get_logger
@@ -49,6 +51,8 @@ class DashboardState:
     llm_client: Optional[LLMClient]
     whitelist_repo: WhitelistRepository
     monitor: Optional[SystemMonitor]
+    zone_manager: Optional[SurveillanceZoneManager]
+    report_generator: ReportGenerator
 
 
 def _resolve_path(config: Config, value: str) -> Path:
@@ -120,6 +124,7 @@ def create_app(
     visualizer: Optional[object] = None,
     llm_client: Optional[LLMClient] = None,
     monitor: Optional[SystemMonitor] = None,
+    zone_manager: Optional[SurveillanceZoneManager] = None,
 ) -> Flask:
     """Construit et configure l'application Flask du dashboard.
 
@@ -157,6 +162,8 @@ def create_app(
         llm_client=llm_client,
         whitelist_repo=WhitelistRepository(whitelist_dir),
         monitor=monitor,
+        zone_manager=zone_manager or SurveillanceZoneManager(cfg),
+        report_generator=ReportGenerator(cfg),
     )
     app.config["dashboard_state"] = state
 
@@ -179,6 +186,7 @@ def create_app(
     }
     rate_limit_max = max(5, int(os.getenv("DASHBOARD_RATE_LIMIT_PER_MIN", "120")))
     request_history: dict[str, list[float]] = {}
+    external_api_key = os.getenv("SENTINEL_EXTERNAL_API_KEY", "").strip()
 
     def _auth_ok() -> bool:
         if not auth_enabled:
@@ -250,6 +258,20 @@ def create_app(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             if not _auth_ok():
                 return _unauthorized()
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    def require_external_api_key(func: Callable[..., Any]) -> Callable[..., Any]:
+        """Protege les endpoints API v1 via cle simple."""
+
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if not external_api_key:
+                return jsonify({"error": "External API key not configured"}), 503
+            key = request.headers.get("X-API-Key", "")
+            if key != external_api_key:
+                return jsonify({"error": "Unauthorized"}), 401
             return func(*args, **kwargs)
 
         return wrapper
@@ -614,6 +636,79 @@ def create_app(
                 "whitelist_count": len(state.whitelist_repo.list_persons()),
             }
         )
+
+    @app.route("/api/zones", methods=["GET"])
+    @require_auth
+    def api_zones_get() -> Response:
+        """Retourne les zones de surveillance configurees."""
+        if state.zone_manager is None:
+            return jsonify({"items": []})
+        return jsonify({"items": state.zone_manager.list_zones()})
+
+    @app.route("/api/zones", methods=["PUT"])
+    @require_auth
+    def api_zones_put() -> Response:
+        """Met a jour les zones de surveillance."""
+        if state.zone_manager is None:
+            return jsonify({"error": "Zone manager unavailable"}), 503
+
+        payload = request.get_json(silent=True) or {}
+        zones = payload.get("zones") if isinstance(payload, dict) else None
+        if not isinstance(zones, list):
+            return jsonify({"error": "Invalid payload: zones[] required"}), 400
+
+        items = state.zone_manager.set_zones(zones)
+        return jsonify({"updated": True, "items": items})
+
+    @app.route("/api/report/daily")
+    @require_auth
+    def api_report_daily() -> Response:
+        """Genere un rapport PDF journalier et retourne son chemin."""
+        date_str = str(request.args.get("date") or datetime.now().strftime("%Y-%m-%d"))
+        try:
+            date_value = datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
+
+        path = state.report_generator.generate_daily_report(date_value)
+        return jsonify({"report_path": path, "date": date_str})
+
+    @app.route("/api/v1/webhook/alert", methods=["POST"])
+    @require_external_api_key
+    def api_v1_webhook_alert() -> Response:
+        """Endpoint externe pour recevoir une alerte tierce."""
+        payload = request.get_json(silent=True) or {}
+        if state.event_bus is not None:
+            state.event_bus.emit(
+                "external_alert",
+                {
+                    "source": payload.get("source", "external"),
+                    "message": payload.get("message", ""),
+                    "severity": payload.get("severity", "normal"),
+                },
+            )
+        return jsonify({"accepted": True})
+
+    @app.route("/api/v1/cameras")
+    @require_external_api_key
+    def api_v1_cameras() -> Response:
+        """Liste les cameras connues (MVP: camera unique)."""
+        camera_source = cfg.camera.source
+        return jsonify({"items": [{"id": "cam_0", "name": "Main Camera", "source": camera_source}]})
+
+    @app.route("/api/v1/stream/<cam_id>")
+    @require_external_api_key
+    def api_v1_stream(cam_id: str) -> Response:
+        """Expose le stream video pour une camera (cam_0 seulement)."""
+        if cam_id != "cam_0":
+            return jsonify({"error": "Camera not found"}), 404
+        return video_stream()
+
+    @app.route("/api/v1/report/daily")
+    @require_external_api_key
+    def api_v1_report_daily() -> Response:
+        """Expose le rapport journalier via API externe securisee."""
+        return api_report_daily()
 
     def _emit_system_status() -> None:
         """Emet periodiquement le status systeme sur websocket."""
