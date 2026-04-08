@@ -23,6 +23,7 @@ cython>=3.0.0
 
 # Dashboard Web
 flask>=3.0.0
+flask-socketio>=5.3.0
 
 # Voix (TTS + STT)
 edge-tts>=6.1.0

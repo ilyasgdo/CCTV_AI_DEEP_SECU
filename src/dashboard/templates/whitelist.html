@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Gestion Whitelist</h2>
+  <form id="add-person-form" class="form-row">
+    <input name="name" placeholder="Nom complet" required>
+    <input name="role" placeholder="Role" value="Employe">
+    <input name="access_level" placeholder="Niveau" value="user">
+    <button type="submit">Ajouter</button>
+  </form>
+  <div id="whitelist-list"></div>
+</section>
+{% endblock %}

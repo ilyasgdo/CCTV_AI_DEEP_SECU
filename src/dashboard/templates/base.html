@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentinel-AI - {{ title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+  <script defer src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</head>
+<body data-page="{{ title|lower }}">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🛡️</span>
+      <h1>Sentinel-AI</h1>
+    </div>
+    <div id="status-pill" class="pill online">● En ligne</div>
+  </header>
+
+  <nav class="nav">
+    <a href="/">Live</a>
+    <a href="/whitelist">Whitelist</a>
+    <a href="/events">Evenements</a>
+    <a href="/snapshots">Snapshots</a>
+    <a href="/settings">Parametres</a>
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

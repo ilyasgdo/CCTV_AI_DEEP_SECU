@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="grid-live">
+  <article class="card video-card">
+    <h2>Flux Video Live</h2>
+    <img id="live-stream" src="/api/stream" alt="Live stream">
+  </article>
+
+  <article class="card metrics-card">
+    <h2>Infos Temps Reel</h2>
+    <ul id="metrics-list">
+      <li>FPS: <strong id="m-fps">0</strong></li>
+      <li>Personnes: <strong id="m-persons">0</strong></li>
+      <li>LLM: <strong id="m-llm">inconnu</strong></li>
+      <li>CPU: <strong id="m-cpu">0%</strong></li>
+      <li>RAM: <strong id="m-ram">0%</strong></li>
+    </ul>
+    <h3>Derniere action IA</h3>
+    <p id="last-ai-action">Aucune action.</p>
+  </article>
+</section>
+
+<section class="card">
+  <h2>Journal des evenements</h2>
+  <div id="event-feed" class="event-feed"></div>
+</section>
+{% endblock %}
