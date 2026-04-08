@@ -1,0 +1,114 @@
+🛡️ Projet "Sentinel-AI" : Gardien de Sécurité Autonome Multimodal
+🎯 1. Vision et But du Projet
+Créer un agent d'Intelligence Artificielle autonome agissant comme un gardien de sécurité physique et interactif.
+Sentinel-AI surveille un flux vidéo (configurable) en temps réel, identifie les personnes, analyse le contexte de la scène de manière asynchrone, et interagit vocalement.
+
+L'optimisation matérielle et la flexibilité sont au cœur du projet :
+
+La perception brute (vision et écoute temps réel) tourne sur le CPU local.
+
+La cognition complexe (LLM/VLM Gemma 4) est gérée par le GPU.
+
+Architecture Découplée : La connexion au modèle IA se fait via une API Agnostique configurable. Si le PC local n'a pas de GPU, l'URL de l'API peut être modifiée dans les paramètres pour pointer vers un serveur distant (ex: un serveur Ollama dans le cloud ou sur une autre machine du réseau), rendant le boîtier caméra autonome très léger.
+
+✨ 2. Fonctionnalités Clés (Scope du MVP)
+Configuration du Matériel et Réseau :
+
+Choix de la source vidéo (Webcam, Flux IP/RTSP, DroidCam).
+
+Configuration du endpoint IA (URL de l'API et Nom du Modèle) pour permettre une inférence locale ou distante fluide.
+
+Le "Dashboard" Client (Interface Web) : Une application web intuitive (React/Next.js) :
+
+Live View : Visualisation du flux caméra avec bounding boxes (WebRTC).
+
+Gestion Whitelist : Interface d'enrôlement rapide.
+
+Journal des Événements : Feed des snapshots, analyses et alertes.
+
+Menu Paramètres : Pour changer l'URL du LLM à la volée.
+
+Perception Temps Réel (CPU) :
+
+Détection d'objets (YOLO) et de visages (comparaison Whitelist).
+
+Cognition Asynchrone (Ollama GPU - Local ou Distant) :
+
+Analyse sémantique de la scène toutes les 5 secondes via le modèle gemma4-lox-maxctx (ou équivalent).
+
+Audio Bidirectionnel :
+
+Voix (TTS sur CPU) : Lecture à haute voix des réponses de l'IA.
+
+Ouïe (STT sur CPU) : Transcription (Whisper) ou saisie manuelle de la réponse de l'interlocuteur.
+
+Utilisation d'Outils (Tool Use) : Exécution de scripts locaux (email, alarme) dictés par le JSON de l'IA.
+
+🏗️ 3. Architecture Technique et Répartition Matérielle
+🌐 A. Le Front-End (Dashboard)
+Rôle : Interface client, paramétrage de l'URL IA, affichage du Live View.
+
+💻 B. Le Pipeline CPU (Le client "Edge")
+Rôle : Gère la caméra, le micro, le tracking (OpenCV/YOLO/Whisper) et le TTS.
+
+Fonction Vitale : Prépare le "Paquet de 5s" et gère la requête HTTP sortante. Il contient un parseur Regex (expressions régulières) pour nettoyer la réponse brute de l'IA et en extraire le JSON (crucial pour les modèles "Thinking").
+
+🎮 C. Le Pipeline GPU (Le "Serveur Cognitif" - Déportable)
+Technologies : API Ollama (ex: http://localhost:11434 ou http://192.168.1.50:11434), Modèle Gemma 4.
+
+Rôle : Reçoit le paquet HTTP, génère la réflexion interne (<think>), puis produit le JSON d'action.
+
+🔊 D. Le Pipeline Effecteur
+Exécute localement (sur la machine CPU) les commandes contenues dans le JSON.
+
+🔄 4. Le Workflow Principal (Spécial "Thinking Model")
+[T=0.0s à 4.9s] CPU (Edge) : Tracking et transcription STT.
+
+[T=5.0s] Snapshot CPU : Compilation Frame + Contexte visuel + Contexte auditif.
+
+[T=5.1s] Requête POST envoyée à l'URL configurée (ex: http://[API_URL]/api/generate).
+
+[T=5.5s - 6.5s] Traitement GPU (Gemma 4). Spécificité du modèle Thinking : L'IA génère d'abord une chaîne de réflexion interne, puis le JSON.
+
+Plaintext
+<think>
+L'inconnu a des outils et affirme être le plombier. Les objets détectés (Caisse à outils) correspondent à son discours. Cependant, il n'est pas sur la whitelist. Je ne peux pas ouvrir la porte sans validation humaine. Je vais lui dire de patienter et utiliser l'outil email.
+</think>
+{
+  "action_vocale": "Veuillez patienter, j'envoie une demande de confirmation au propriétaire.",
+  "tools": [
+    {"nom": "send_email", "args": {"urgence": "moyenne", "sujet": "Demande d'accès : Plombier à l'entrée"}}
+  ]
+}
+[T=6.6s] Le module CPU reçoit la réponse texte. Il applique une fonction de nettoyage (ex: re.sub(r'<think>.*?</think>', '', texte, flags=re.DOTALL)) pour isoler le JSON.
+
+[T=6.7s] Le JSON purifié est parsé : Le TTS s'active, l'email est envoyé.
+
+🤖 5. Stratégie du System Prompt (Optimisé pour Gemma 4 Thinking)
+Pour exploiter la puissance de raisonnement de ton modèle tout en garantissant un format de sortie machine-readable, le prompt doit explicitement dicter l'usage des balises de réflexion.
+
+"Tu es Sentinel-AI, un agent de sécurité autonome, observateur, ferme mais courtois. Tu reçois des données de capteurs toutes les 5 secondes (Image de la caméra, Objets détectés, et éventuellement la transcription de ce que dit l'interlocuteur).
+
+Instructions Opérationnelles :
+
+Identité : Salue les personnes de la Whitelist. Interroge les inconnus.
+
+Cohérence : Si un inconnu parle (Contexte Auditif), compare ses dires avec la scène visuelle (ex: a-t-il la tenue ou les outils correspondant à son motif ?).
+
+Sécurité : Ne valide jamais un accès non autorisé sans demander une confirmation via tes outils. En cas de menace immédiate (arme, effraction), alerte via l'outil send_email.
+
+Protocole de Réponse OBLIGATOIRE :
+Tu es un modèle capable de réflexion. Tu dois OBLIGATOIREMENT structurer ta réponse en deux parties :
+
+D'abord, utilise des balises <think>...</think> pour analyser la scène, évaluer la menace, et décider de la marche à suivre.
+
+Ensuite, fournis un objet JSON strict (et rien d'autre) contenant tes actions.
+
+Structure exacte attendue :
+<think>
+(Écris ici ton raisonnement sur la situation, l'analyse des objets, et la justification de ta décision)
+</think>
+{
+"action_vocale": "La phrase exacte qui sera lue par le haut-parleur pour interagir avec la personne (laisse vide si inutile)",
+"outils_a_lancer": [{"tool_name": "nom_de_l_outil", "parametres": "details_des_parametres"}]
+}"
