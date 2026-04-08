@@ -18,7 +18,7 @@ Usage:
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -87,7 +87,7 @@ class TrackedEntity:
     @property
     def last_detection(self) -> Optional[Detection]:
         """Retourne la dernière détection."""
-        return self._detections[-1] if self.detections else None
+        return self.detections[-1] if self.detections else None
 
     @property
     def last_bbox(self) -> Optional[tuple[int, int, int, int]]:
@@ -439,6 +439,28 @@ class Tracker:
             TrackedEntity ou None.
         """
         return self._entities.get(track_id)
+
+    def apply_face_recognition(
+        self,
+        frame: np.ndarray,
+        face_manager: Any,
+        frame_id: int,
+    ) -> list[TrackedEntity]:
+        """Enrichit les entités trackées avec la reconnaissance faciale.
+
+        Args:
+            frame: Frame BGR courante.
+            face_manager: Instance de FaceManager.
+            frame_id: ID de la frame courante.
+
+        Returns:
+            Liste des entités actives enrichies.
+        """
+        entities = self.active_entities
+        for entity in entities:
+            if entity.is_person:
+                face_manager.recognize_entity(frame, entity, frame_id)
+        return entities
 
     @property
     def total_appeared(self) -> int:

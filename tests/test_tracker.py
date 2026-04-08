@@ -7,6 +7,7 @@ IoU, distance euclidienne, événements.
 
 import time
 
+import numpy as np
 import pytest
 
 from src.core.config import Config
@@ -236,6 +237,37 @@ class TestTrackerLifecycle:
         det2 = make_detection(105, 105, 205, 205)
         entities = tracker.update([det2])
         assert entities[0].status == EntityStatus.TRACKED
+
+
+# ──────────────────────────────────────────────
+# Tests — Tracker : Intégration FaceManager
+# ──────────────────────────────────────────────
+
+class TestTrackerFaceIntegration:
+    """Tests de l'intégration tracker -> face_manager."""
+
+    def test_apply_face_recognition_calls_manager(
+        self, tracker: Tracker
+    ) -> None:
+        """Le tracker appelle recognize_entity pour chaque personne."""
+        det = make_detection(100, 100, 200, 200, class_id=0)
+        tracker.update([det])
+
+        calls: list[int] = []
+
+        class FakeFaceManager:
+            def recognize_entity(self, frame, entity, frame_id):
+                calls.append(entity.track_id)
+                entity.face_status = "known"
+                return entity
+
+        frame = np.zeros((300, 300, 3), dtype=np.uint8)
+        entities = tracker.apply_face_recognition(
+            frame, FakeFaceManager(), frame_id=1
+        )
+
+        assert len(calls) == 1
+        assert entities[0].face_status == "known"
 
     def test_lost_after_no_detection(self, tracker: Tracker) -> None:
         """TRACKED → LOST quand pas de détection."""
