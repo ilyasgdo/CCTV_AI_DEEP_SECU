@@ -64,6 +64,12 @@ Variable d'environnement associee:
 - `clip_pre_seconds`
 - `clip_post_seconds`
 
+Variables d'environnement associees:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `SENTINEL_EXTERNAL_API_KEY`
+
 ## logging
 
 - `level`

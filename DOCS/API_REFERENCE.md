@@ -24,6 +24,16 @@
 - `GET /api/monitoring`: metriques detaillees
 - `GET /api/snapshots`: galerie snapshots
 - `GET /api/stats`: stats globales
+- `GET /api/zones`: liste des zones de surveillance
+- `PUT /api/zones`: mise a jour des zones
+- `GET /api/report/daily`: generation du rapport PDF journalier
+
+## API REST externe (v1)
+
+- `POST /api/v1/webhook/alert`: webhook d'alerte entrant
+- `GET /api/v1/cameras`: liste des cameras exposees
+- `GET /api/v1/stream/<cam_id>`: stream camera securise
+- `GET /api/v1/report/daily`: recuperation rapport journalier
 
 ## Securite
 
@@ -32,6 +42,8 @@
 - Rate limiting API configurable:
   - `DASHBOARD_RATE_LIMIT_ENABLED`
   - `DASHBOARD_RATE_LIMIT_PER_MIN`
+- API externe protegee par cle:
+  - `SENTINEL_EXTERNAL_API_KEY`
 
 ## Erreurs communes
 
