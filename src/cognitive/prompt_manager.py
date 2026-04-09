@@ -46,7 +46,15 @@ class PromptManager:
             return "- Aucun objet detecte"
 
         class_counter = Counter(d.class_name for d in detections)
-        lines = [f"- {name}: {count}" for name, count in class_counter.items()]
+        best_conf: dict[str, float] = {}
+        for detection in detections:
+            current = best_conf.get(detection.class_name, 0.0)
+            best_conf[detection.class_name] = max(current, float(detection.confidence))
+
+        lines = [
+            f"- {name}: {count} (conf_max={best_conf.get(name, 0.0):.2f})"
+            for name, count in class_counter.items()
+        ]
         return "\n".join(lines)
 
     @staticmethod
@@ -78,6 +86,49 @@ class PromptManager:
 
         return "\n".join(lines) if lines else "- Aucune personne detectee"
 
+    @staticmethod
+    def _format_risk_block(detections: list[Detection], entities: list[TrackedEntity]) -> str:
+        """Construit une synthese risques/suspicions basee sur les capteurs."""
+        if not detections and not entities:
+            return "- Risque non evalue (aucune donnee capteur exploitable)"
+
+        danger_keywords = {"knife", "gun", "weapon", "fire", "smoke", "flame", "explosion"}
+        suspicious_keywords = {"backpack", "suitcase", "handbag"}
+
+        danger_hits: Counter[str] = Counter()
+        suspicious_hits: Counter[str] = Counter()
+        unknown_persons = 0
+
+        for detection in detections:
+            label = str(detection.class_name or "objet")
+            normalized = label.lower().strip().replace("_", " ")
+            if any(keyword in normalized for keyword in danger_keywords):
+                danger_hits[label] += 1
+            elif any(keyword in normalized for keyword in suspicious_keywords):
+                suspicious_hits[label] += 1
+
+        for entity in entities:
+            if not bool(getattr(entity, "is_person", False)):
+                continue
+            status = str(getattr(entity, "face_status", "unknown") or "unknown")
+            if status != "known":
+                unknown_persons += 1
+
+        lines: list[str] = []
+        if danger_hits:
+            labels = ", ".join(f"{name}:{count}" for name, count in danger_hits.items())
+            lines.append(f"- DANGER DETECTE: {labels}")
+        if unknown_persons > 0:
+            lines.append(f"- Personnes non reconnues: {unknown_persons}")
+        if suspicious_hits:
+            labels = ", ".join(f"{name}:{count}" for name, count in suspicious_hits.items())
+            lines.append(f"- Objets a surveiller: {labels}")
+
+        if not lines:
+            lines.append("- Aucun risque evident dans les capteurs")
+
+        return "\n".join(lines)
+
     def build_analysis_prompt(
         self,
         detections: list[Detection],
@@ -107,6 +158,9 @@ class PromptManager:
             "",
             "IDENTIFICATION:",
             self._format_identity_block(tracked_entities),
+            "",
+            "EVALUATION RISQUE (CAPTEURS):",
+            self._format_risk_block(detections, tracked_entities),
             "",
             "CONTEXTE AUDITIF:",
             (audio_transcript or "Aucune transcription audio."),

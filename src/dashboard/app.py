@@ -53,6 +53,9 @@ class DashboardState:
     monitor: Optional[SystemMonitor]
     zone_manager: Optional[SurveillanceZoneManager]
     report_generator: ReportGenerator
+    last_ai_action: str = "Aucune action."
+    last_ai_alert_level: str = "normal"
+    last_ai_response_ms: float = 0.0
 
 
 def _resolve_path(config: Config, value: str) -> Path:
@@ -166,6 +169,26 @@ def create_app(
         report_generator=ReportGenerator(cfg),
     )
     app.config["dashboard_state"] = state
+    state_lock = threading.Lock()
+
+    if state.event_bus is not None:
+        def _remember_llm_response(payload: dict[str, Any]) -> None:
+            action = str(payload.get("action_vocale") or "").strip()
+            if not action:
+                return
+            alert = str(payload.get("niveau_alerte") or "normal")
+            response_ms = payload.get("response_time_ms", 0.0)
+            try:
+                response_ms_value = float(response_ms)
+            except (TypeError, ValueError):
+                response_ms_value = 0.0
+
+            with state_lock:
+                state.last_ai_action = action
+                state.last_ai_alert_level = alert
+                state.last_ai_response_ms = response_ms_value
+
+        state.event_bus.subscribe("llm_response", _remember_llm_response)
 
     auth_enabled = os.getenv("DASHBOARD_AUTH_ENABLED", "true").lower() in {
         "1",
@@ -578,6 +601,11 @@ def create_app(
         except Exception:
             llm_ok = False
 
+        with state_lock:
+            last_ai_action = state.last_ai_action
+            last_ai_alert_level = state.last_ai_alert_level
+            last_ai_response_ms = state.last_ai_response_ms
+
         return {
             "online": True,
             "fps": fps,
@@ -585,6 +613,9 @@ def create_app(
             "llm_connected": llm_ok,
             "cpu_percent": metrics["cpu_percent"],
             "ram_percent": metrics["ram_percent"],
+            "last_ai_action": last_ai_action,
+            "last_ai_alert_level": last_ai_alert_level,
+            "last_ai_response_ms": last_ai_response_ms,
             "timestamp": datetime.now(timezone.utc)
             .replace(microsecond=0)
             .isoformat()

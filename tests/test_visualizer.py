@@ -72,8 +72,8 @@ def test_visualizer_draw_with_entities_and_pose() -> None:
     assert np.any(annotated != frame)
 
 
-def test_visualizer_lost_entity_dashed_box() -> None:
-    """Une entite LOST est dessinee sans erreur (style pointille)."""
+def test_visualizer_lost_entity_hidden_from_overlay() -> None:
+    """Une entite LOST n'est pas affichee dans le flux live."""
     viz = Visualizer(show_hud=False, show_labels=True)
     frame = _make_frame()
 
@@ -91,4 +91,4 @@ def test_visualizer_lost_entity_dashed_box() -> None:
 
     annotated = viz.draw(frame, entities=[entity])
     assert annotated.shape == frame.shape
-    assert np.any(annotated != frame)
+    assert np.all(annotated == frame)

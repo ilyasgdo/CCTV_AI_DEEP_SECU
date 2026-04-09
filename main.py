@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import concurrent.futures
 import json
 import os
 import sys
@@ -31,6 +32,7 @@ from src.core.detector import Detection, ObjectDetector
 from src.core.face_manager import FaceManager
 from src.core.surveillance_zones import SurveillanceZoneManager
 from src.core.tracker import Tracker, TrackedEntity
+from src.core.visualizer import Visualizer
 from src.dashboard.app import create_app
 from src.effector import ToolExecutor
 from src.utils.event_bus import EventBus
@@ -108,6 +110,7 @@ class SentinelAI:
         self.detector: Optional[ObjectDetector] = None
         self.tracker = Tracker(self.config, self.event_bus)
         self.face_manager: Optional[FaceManager] = None
+        self.visualizer: Optional[Visualizer] = None
         self.clip_recorder = AlertClipRecorder(self.config)
         self.zone_manager = SurveillanceZoneManager(self.config)
 
@@ -159,14 +162,25 @@ class SentinelAI:
             self.logger.warning("FaceManager degrade: %s", exc)
             self.face_manager = None
 
+        try:
+            self.visualizer = Visualizer(show_skeleton=True, show_hud=False)
+        except Exception as exc:
+            self.logger.warning("Visualizer indisponible: %s", exc)
+            self.visualizer = None
+
         if not self.runtime_options.no_audio:
             try:
                 self.tts = TTSEngine(self.config, self.event_bus)
-                self.stt = STTEngine(self.config, self.event_bus)
+                self._degraded_audio = False
             except Exception as exc:
-                self.logger.warning("Audio indisponible, mode texte uniquement: %s", exc)
+                self.logger.warning("TTS indisponible, mode texte uniquement: %s", exc)
                 self._degraded_audio = True
                 self.tts = None
+
+            try:
+                self.stt = STTEngine(self.config, self.event_bus)
+            except Exception as exc:
+                self.logger.warning("STT indisponible, ecoute vocale desactivee: %s", exc)
                 self.stt = None
         else:
             self._degraded_audio = True
@@ -184,6 +198,7 @@ class SentinelAI:
                 event_bus=self.event_bus,
                 camera=self.camera,
                 tracker=self.tracker,
+                visualizer=self.visualizer,
                 llm_client=self.llm_client,
                 monitor=self.monitor,
                 zone_manager=self.zone_manager,
@@ -223,7 +238,27 @@ class SentinelAI:
         if str(data.get("niveau_alerte", "normal")) in {"alerte", "critique"}:
             self.clip_recorder.on_alert("llm_alert")
 
-        asyncio.run_coroutine_threadsafe(self._execute_actions(data), loop)
+        future = asyncio.run_coroutine_threadsafe(self._execute_actions(data), loop)
+        future.add_done_callback(self._log_action_execution_result)
+
+    def _log_action_execution_result(self, future: concurrent.futures.Future[Any]) -> None:
+        """Journalise toute erreur sur l'execution asynchrone des actions LLM."""
+        try:
+            error = future.exception()
+        except concurrent.futures.CancelledError:
+            return
+        except Exception as exc:  # pragma: no cover - garde-fou
+            self.logger.error("Impossible de lire le resultat des actions LLM: %s", exc)
+            return
+
+        if error is None:
+            return
+
+        self.logger.error(
+            "Erreur execution actions LLM: %s",
+            error,
+            exc_info=(type(error), error, error.__traceback__),
+        )
 
     def _on_alert_event(self, _: dict[str, Any]) -> None:
         """Declenche l'enregistrement de clip sur evenement alerte."""
@@ -234,8 +269,12 @@ class SentinelAI:
         action_vocale = str(payload.get("action_vocale") or "").strip()
         tools = payload.get("outils_a_lancer") or []
 
+        if action_vocale:
+            self.logger.info("Action IA: %s", action_vocale)
+
         if action_vocale and self.tts is not None and not self._degraded_audio:
             await self.tts.speak(action_vocale)
+            self.logger.info("Action vocale envoyee au moteur TTS")
         elif action_vocale:
             self.logger.info("Action vocale (mode texte): %s", action_vocale)
 

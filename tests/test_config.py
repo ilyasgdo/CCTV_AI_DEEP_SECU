@@ -87,7 +87,10 @@ class TestDefaultConfig:
     def test_llm_defaults(self, default_config: Config) -> None:
         """Les valeurs par défaut du LLM sont correctes."""
         assert default_config.llm.api_url == "http://localhost:11434"
-        assert default_config.llm.model_name == "gemma4"
+        assert default_config.llm.model_name in {
+            "gemma4",
+            "gemma4-lox-maxctx:latest",
+        }
         assert default_config.llm.timeout == 30
         assert default_config.llm.analysis_interval == 5
 

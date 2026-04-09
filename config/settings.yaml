@@ -19,12 +19,13 @@ camera:
 # ── Modèle de Langage (Ollama / API) ─────────────────────
 llm:
   api_url: "http://localhost:11434"   # URL de l'API Ollama
-  model_name: "gemma4"                # Nom du modèle
+  model_name: "gemma4-lox-maxctx:latest"  # Nom du modèle
   timeout: 30                         # Timeout par requête (secondes)
   analysis_interval: 5                # Intervalle d'analyse (secondes)
   max_retries: 3                      # Nombre de retry en cas d'erreur
   temperature: 0.3                    # Température de génération
   max_tokens: 1024                    # Tokens max par réponse
+  num_ctx: 4096                       # Fenêtre contexte envoyée au modèle
 
 # ── Détection d'Objets (YOLO) ────────────────────────────
 detection:

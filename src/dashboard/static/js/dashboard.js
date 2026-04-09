@@ -35,6 +35,9 @@ async function refreshStatus() {
   setText("m-llm", status.llm_connected ? "connecte" : "deconnecte");
   setText("m-cpu", `${Number(status.cpu_percent || 0).toFixed(1)}%`);
   setText("m-ram", `${Number(status.ram_percent || 0).toFixed(1)}%`);
+  if (status.last_ai_action) {
+    setText("last-ai-action", status.last_ai_action);
+  }
 }
 
 async function refreshEventsPage() {

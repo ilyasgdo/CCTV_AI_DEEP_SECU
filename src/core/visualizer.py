@@ -130,7 +130,9 @@ class Visualizer:
         person_count = 0
         if entities:
             for entity in entities:
-                if entity.status == EntityStatus.DISAPPEARED:
+                # En mode live, on masque les entites perdues pour eviter
+                # les boites stale visibles a l'ecran.
+                if entity.status in {EntityStatus.DISAPPEARED, EntityStatus.LOST}:
                     continue
                 self._draw_entity(annotated, entity)
                 if entity.is_person:

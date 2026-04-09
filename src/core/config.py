@@ -65,6 +65,8 @@ class LLMConfig:
     max_retries: int = 3
     temperature: float = 0.3
     max_tokens: int = 1024
+    num_ctx: int = 4096
+    keep_alive: str = "15m"
 
 
 @dataclass
@@ -234,8 +236,27 @@ class Config:
             f"{env_prefix}LLM_API_URL": (self.llm, "api_url"),
             f"{env_prefix}LLM_MODEL_NAME": (self.llm, "model_name"),
             f"{env_prefix}LLM_TIMEOUT": (self.llm, "timeout"),
+            f"{env_prefix}LLM_ANALYSIS_INTERVAL": (
+                self.llm, "analysis_interval"
+            ),
+            f"{env_prefix}LLM_MAX_RETRIES": (self.llm, "max_retries"),
+            f"{env_prefix}LLM_MAX_TOKENS": (self.llm, "max_tokens"),
+            f"{env_prefix}LLM_NUM_CTX": (self.llm, "num_ctx"),
+            f"{env_prefix}LLM_KEEP_ALIVE": (self.llm, "keep_alive"),
             f"{env_prefix}DETECTION_MODEL_PATH": (
                 self.detection, "model_path"
+            ),
+            f"{env_prefix}DETECTION_CONFIDENCE": (
+                self.detection, "confidence"
+            ),
+            f"{env_prefix}DETECTION_IOU_THRESHOLD": (
+                self.detection, "iou_threshold"
+            ),
+            f"{env_prefix}DETECTION_INPUT_SIZE": (
+                self.detection, "input_size"
+            ),
+            f"{env_prefix}DETECTION_SKIP_FRAMES": (
+                self.detection, "skip_frames"
             ),
             f"{env_prefix}DASHBOARD_HOST": (self.dashboard, "host"),
             f"{env_prefix}DASHBOARD_PORT": (self.dashboard, "port"),
@@ -289,6 +310,39 @@ class Config:
         if self.llm.timeout < 1:
             raise ConfigValidationError(
                 f"llm.timeout doit être >= 1, reçu: {self.llm.timeout}"
+            )
+
+        if self.llm.analysis_interval < 1:
+            raise ConfigValidationError(
+                "llm.analysis_interval doit être >= 1, "
+                f"reçu: {self.llm.analysis_interval}"
+            )
+
+        if self.llm.max_retries < 1:
+            raise ConfigValidationError(
+                f"llm.max_retries doit être >= 1, reçu: {self.llm.max_retries}"
+            )
+
+        if self.llm.max_tokens < 1:
+            raise ConfigValidationError(
+                f"llm.max_tokens doit être >= 1, reçu: {self.llm.max_tokens}"
+            )
+
+        if self.llm.num_ctx < 512:
+            raise ConfigValidationError(
+                f"llm.num_ctx doit être >= 512, reçu: {self.llm.num_ctx}"
+            )
+
+        if self.detection.input_size < 160:
+            raise ConfigValidationError(
+                "detection.input_size doit être >= 160, "
+                f"reçu: {self.detection.input_size}"
+            )
+
+        if self.detection.skip_frames < 1:
+            raise ConfigValidationError(
+                "detection.skip_frames doit être >= 1, "
+                f"reçu: {self.detection.skip_frames}"
             )
 
         if self.dashboard.port < 1 or self.dashboard.port > 65535:

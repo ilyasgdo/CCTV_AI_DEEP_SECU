@@ -49,6 +49,8 @@ class LLMClient:
         self.max_retries = int(config.llm.max_retries)
         self.temperature = float(config.llm.temperature)
         self.max_tokens = int(config.llm.max_tokens)
+        self.num_ctx = int(getattr(config.llm, "num_ctx", 4096))
+        self.keep_alive = str(getattr(config.llm, "keep_alive", "15m") or "15m")
 
         self._request_fn = request_fn or requests.request
         self._metrics = LLMMetrics()
@@ -117,6 +119,40 @@ class LLMClient:
         self._metrics.last_response_ms = elapsed_ms
         self._metrics.last_error = error
 
+    @staticmethod
+    def _is_404_error(exc: Exception) -> bool:
+        """Detecte un echec HTTP 404 sans dependre d'un type d'exception specifique."""
+        text = str(exc)
+        return "404" in text and ("Not Found" in text or "http 404" in text)
+
+    @staticmethod
+    def _is_timeout_error(exc: Exception) -> bool:
+        """Detecte les erreurs de timeout reseau de facon tolerante."""
+        text = str(exc).lower()
+        return "timeout" in text or "timed out" in text or "read timeout" in text
+
+    @staticmethod
+    def _extract_text_response(data: dict[str, Any]) -> Optional[str]:
+        """Extrait le texte depuis plusieurs formats de reponse LLM."""
+        if isinstance(data.get("response"), str):
+            return data["response"]
+
+        if isinstance(data.get("message"), dict):
+            content = data["message"].get("content", "")
+            if isinstance(content, str):
+                return content
+
+        if isinstance(data.get("choices"), list) and data["choices"]:
+            first = data["choices"][0]
+            if isinstance(first, dict):
+                msg = first.get("message")
+                if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                    return msg["content"]
+                if isinstance(first.get("text"), str):
+                    return first["text"]
+
+        return None
+
     async def generate(self, prompt: str, image: Optional[bytes] = None) -> str:
         """Envoie un prompt au LLM et retourne la reponse brute.
 
@@ -134,25 +170,86 @@ class LLMClient:
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": self.keep_alive,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.max_tokens,
+                "num_ctx": self.num_ctx,
                 "top_p": 0.9,
             },
         }
 
         if image is not None:
             payload["images"] = [base64.b64encode(image).decode("utf-8")]
+        try:
+            data = await self._request_json("POST", "/api/generate", payload)
+        except LLMClientError as exc:
+            # Si timeout, on tente une requete plus legere pour debloquer la boucle IA.
+            if self._is_timeout_error(exc):
+                logger.warning(
+                    "Timeout LLM /api/generate, retry rapide avec payload reduit"
+                )
+                fast_payload = dict(payload)
+                fast_options = dict(payload.get("options", {}))
+                fast_options["num_predict"] = min(self.max_tokens, 160)
+                fast_options["num_ctx"] = min(self.num_ctx, 1024)
+                fast_payload["options"] = fast_options
+                try:
+                    data = await self._request_json("POST", "/api/generate", fast_payload)
+                except LLMClientError as retry_exc:
+                    exc = retry_exc
+                    # Ultime fallback: conserver le contexte texte si l'image bloque.
+                    logger.warning(
+                        "Retry multimodal echoue, fallback texte-seul /api/generate"
+                    )
+                    text_only_payload = dict(fast_payload)
+                    text_only_payload.pop("images", None)
+                    try:
+                        data = await self._request_json(
+                            "POST", "/api/generate", text_only_payload
+                        )
+                    except LLMClientError as text_exc:
+                        exc = text_exc
+                    else:
+                        text = self._extract_text_response(data)
+                        if isinstance(text, str):
+                            return text
+                        raise LLMClientError("Reponse LLM invalide: champ texte introuvable")
+                else:
+                    text = self._extract_text_response(data)
+                    if isinstance(text, str):
+                        return text
+                    raise LLMClientError("Reponse LLM invalide: champ texte introuvable")
 
-        data = await self._request_json("POST", "/api/generate", payload)
+            if not self._is_404_error(exc):
+                raise
 
-        if isinstance(data.get("response"), str):
-            return data["response"]
+            # Fallback pour backends OpenAI-compatibles exposes sur /v1.
+            content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            if image is not None:
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": (
+                                "data:image/jpeg;base64,"
+                                f"{base64.b64encode(image).decode('utf-8')}"
+                            )
+                        },
+                    }
+                )
 
-        if isinstance(data.get("message"), dict):
-            content = data["message"].get("content", "")
-            if isinstance(content, str):
-                return content
+            v1_payload: dict[str, Any] = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": content}],
+                "temperature": self.temperature,
+                "max_tokens": min(self.max_tokens, 160),
+            }
+            data = await self._request_json("POST", "/v1/chat/completions", v1_payload)
+
+        text = self._extract_text_response(data)
+        if isinstance(text, str):
+            return text
 
         raise LLMClientError("Reponse LLM invalide: champ texte introuvable")
 
@@ -161,19 +258,43 @@ class LLMClient:
         try:
             await self._request_json("GET", "/api/tags", None)
             return True
+        except LLMClientError as exc:
+            if not self._is_404_error(exc):
+                return False
+
+        try:
+            await self._request_json("GET", "/v1/models", None)
+            return True
         except LLMClientError:
             return False
 
     async def list_models(self) -> list[str]:
         """Liste les modeles disponibles via /api/tags."""
-        data = await self._request_json("GET", "/api/tags", None)
-        models = data.get("models", [])
+        try:
+            data = await self._request_json("GET", "/api/tags", None)
+            models = data.get("models", [])
+
+            names: list[str] = []
+            if isinstance(models, list):
+                for model in models:
+                    if isinstance(model, dict) and isinstance(model.get("name"), str):
+                        names.append(model["name"])
+
+            return names
+        except LLMClientError as exc:
+            if not self._is_404_error(exc):
+                raise
+
+        data = await self._request_json("GET", "/v1/models", None)
+        models_v1 = data.get("data", [])
 
         names: list[str] = []
-        if isinstance(models, list):
-            for model in models:
-                if isinstance(model, dict) and isinstance(model.get("name"), str):
-                    names.append(model["name"])
+        if isinstance(models_v1, list):
+            for model in models_v1:
+                if isinstance(model, dict):
+                    model_id = model.get("id")
+                    if isinstance(model_id, str):
+                        names.append(model_id)
 
         return names
 
